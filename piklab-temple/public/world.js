@@ -12,11 +12,11 @@ const sp = (r, s = 12) => C(`sp${r},${s}`, () => P.sphere(r, s));
 function rng(seed) { return () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
 
 const PAL = {
-  grass: '#7dbb57', grass2: '#8fca66', grass3: '#6aa64a', soilSide: '#a8683f', soilDeep: '#7b4a2c',
-  tileA: '#eaa173', tileB: '#d9885b', tileC: '#f6d6aa', tileHA: '#b9493a', tileHB: '#f1d2a0',
-  wall: '#f2c56b', cap: '#c9563a', red: '#b8382a', redDk: '#7c2319', gold: '#e8b54a', wood: '#b9824c', woodDk: '#7d5131',
-  roof: '#cf5d3d', roofDk: '#a94430', jade: '#3fae95', stone: '#d9cdb5', stone2: '#b8ab92', bronze: '#c08a35', water: '#57b8cf',
-  leaf: '#5fa443', leaf2: '#74b84f', leaf3: '#4c8c37', pink: '#f3a3c0', pink2: '#f8c4d7', pink3: '#e889ad', cream: '#fff1d6', skin: '#f6c99a', hair: '#3a2617'
+  grass: '#8aa66a', grass2: '#97b277', grass3: '#7a9a5e', soilSide: '#9a7052', soilDeep: '#6f5040',
+  tileA: '#d8b08e', tileB: '#c99d7d', tileC: '#ebdcc4', tileHA: '#8f4a3c', tileHB: '#e6d3b4',
+  wall: '#e3cd9c', cap: '#9a5444', red: '#93392d', redDk: '#62261d', gold: '#c9a862', wood: '#a88262', woodDk: '#6e5340',
+  roof: '#9e5a48', roofDk: '#7d463a', jade: '#5c9a88', stone: '#d6cdbb', stone2: '#b4aa98', bronze: '#a88449', water: '#6fa8b4',
+  leaf: '#6a9a54', leaf2: '#7fa865', leaf3: '#5a8649', pink: '#e7b7c4', pink2: '#f0cfd8', pink3: '#d99fb1', cream: '#f6ecd9', skin: '#f0c9a3', hair: '#3a2a20'
 };
 
 /* ---------------- Ảnh texture (canvas) ---------------- */
@@ -25,9 +25,9 @@ function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w
 const FONT = '"Be Vietnam Pro", system-ui, sans-serif', SERIF = '"Noto Serif", Georgia, serif';
 function signCanvas(text, w, h, opt = {}) {
   const c = canvas(w, h), g = c.getContext('2d');
-  g.fillStyle = opt.bg || '#8f2a1c'; rr(g, 0, 0, w, h, opt.r || 14); g.fill();
-  g.strokeStyle = '#f0c25a'; g.lineWidth = Math.max(4, h * .07); rr(g, h * .1, h * .1, w - h * .2, h - h * .2, (opt.r || 14) * .7); g.stroke();
-  g.fillStyle = opt.fg || '#ffd98a'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = opt.bg || '#7a2a20'; rr(g, 0, 0, w, h, opt.r || 14); g.fill();
+  g.strokeStyle = '#d8b56a'; g.lineWidth = Math.max(4, h * .07); rr(g, h * .1, h * .1, w - h * .2, h - h * .2, (opt.r || 14) * .7); g.stroke();
+  g.fillStyle = opt.fg || '#f3dca2'; g.textAlign = 'center'; g.textBaseline = 'middle';
   let fs = opt.size || h * .42; g.font = `700 ${fs}px ${opt.serif === false ? FONT : SERIF}`;
   while (g.measureText(text).width > w * .86 && fs > 8) { fs -= 2; g.font = `700 ${fs}px ${opt.serif === false ? FONT : SERIF}`; }
   g.fillText(text, w / 2, h / 2 + 2);
@@ -35,9 +35,15 @@ function signCanvas(text, w, h, opt = {}) {
 }
 function verticalSign(words, w, h) {
   const c = canvas(w, h), g = c.getContext('2d');
-  g.fillStyle = '#8f2a1c'; rr(g, 0, 0, w, h, 10); g.fill(); g.strokeStyle = '#f0c25a'; g.lineWidth = 5; rr(g, 8, 8, w - 16, h - 16, 6); g.stroke();
-  g.fillStyle = '#ffd98a'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.font = `700 ${w * .26}px ${FONT}`;
-  words.forEach((wd, i) => g.fillText(wd, w / 2, h * (i + .8) / (words.length + .6)));
+  g.fillStyle = '#7a2a20'; rr(g, 0, 0, w, h, 12); g.fill();
+  g.strokeStyle = '#d8b56a'; g.lineWidth = 6; rr(g, 10, 10, w - 20, h - 20, 8); g.stroke();
+  g.fillStyle = '#f3dca2'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  const inner = w - 44, slot = (h - 60) / words.length;
+  words.forEach((wd, i) => {
+    let fs = Math.min(slot * .55, w * .34); g.font = `700 ${fs}px ${SERIF}`;
+    while (g.measureText(wd).width > inner && fs > 10) { fs -= 1; g.font = `700 ${fs}px ${SERIF}`; }
+    g.fillText(wd, w / 2, 30 + slot * (i + .5));
+  });
   return c;
 }
 function plaqueCanvas(app, img) {
@@ -106,7 +112,7 @@ function build(R, L) {
   world.add(rb(1.1, .035, 2.5, .01), '#e4ad46', T(10, .14, 3.55));
   world.add(rb(1.0, .04, 2.4, .01), '#c0262a', T(10, .145, 3.55));
   for (let i = 0; i < 2; i++) world.add(rb(6.4 - i * .1, .1, .32, .04), PAL.stone, T(10, .03 + i * .06, 5.1 + i * .02 - i * .2)); // bậc thềm
-  world.add(rb(6.0, 2.6, .3, .06), PAL.wall, T(10, 1.3, 1.25));
+  world.add(rb(6.0, 2.85, .3, .06), PAL.wall, T(10, 1.42, 1.25));
   world.add(rb(.28, 2.6, 3.7, .06), PAL.wall, T(7.14, 1.3, 2.95));
   world.add(rb(.28, 2.6, 3.7, .06), PAL.wall, T(12.86, 1.3, 2.95));
   for (const x of [7.4, 8.6, 11.4, 12.6]) {
@@ -115,7 +121,6 @@ function build(R, L) {
     world.add(cy(.15, .15, .1, 14), PAL.gold, T(x, 2.5, 4.8));
     world.add(cy(.135, .135, .06, 14), PAL.gold, T(x, .25, 4.8));
   }
-  for (const x of [7.4, 12.6]) world.add(cy(.12, .13, 2.45, 14), PAL.red, T(x, .2, 1.55));
   roof.add(rb(6.3, .24, .26, .05), PAL.redDk, T(10, 2.62, 4.8));
   roof.add(rb(6.32, .05, .28, .02), PAL.gold, T(10, 2.5, 4.8));
   // hàng ngói ống trên mặt mái
@@ -147,7 +152,7 @@ function build(R, L) {
   // ban thờ
   world.add(rb(4.4, .95, .72, .06), PAL.redDk, T(10, .6, 1.95));
   world.add(rb(4.46, .07, .78, .03), PAL.gold, T(10, 1.08, 1.95));
-  for (let i = 0; i < 4; i++) { world.add(rb(.9, .32, .04, .04), '#9a3423', T(8.6 + i * .93, .62, 2.32)); world.add(rb(.12, .04, .04, .02), PAL.gold, T(8.6 + i * .93, .62, 2.35)); }
+  for (let i = 0; i < 4; i++) { world.add(rb(.9, .26, .04, .04), '#9a3423', T(8.6 + i * .93, .5, 2.32)); world.add(rb(.12, .04, .04, .02), PAL.gold, T(8.6 + i * .93, .5, 2.35)); }
   world.add(rb(4.4, .08, .06, .02), PAL.gold, T(10, .3, 2.32));
   world.add(rb(4.3, 1.48, .44, .05), '#8f2a1c', T(10, .87, 1.5));
   world.add(rb(4.34, .06, .48, .02), PAL.gold, T(10, 1.61, 1.5));
@@ -257,17 +262,21 @@ function build(R, L) {
   gate.add(rb(1.9, .26, .34, .06), PAL.redDk, T(tx, 2.1, tz)); gate.add(rb(4.4, .16, .3, .05), PAL.redDk, T(tx, 1.62, tz));
   gate.add(P.frustum(2.8, 1.2, 1.6, .25, .55), PAL.roof, T(tx, 2.25, tz)); rods(gate, tx, 2.25, tz, 2.8, 1.2, 1.6, .25, .55, 0, .24); gate.add(rb(2.86, .06, 1.24, .02), PAL.gold, T(tx, 2.26, tz));
   for (const s of [-1, 1]) { gate.add(P.frustum(1.6, 1.0, .8, .2, .4), PAL.roof, T(tx + s * 1.6, 1.72, tz)); for (const sz of [-1, 1]) { for (let i = 0; i < 4; i++) gate.add(sp(.08 * (1 - i * .1), 8), i === 3 ? PAL.gold : PAL.roofDk, T(tx + s * (1.4 + i * .08), 2.28 + i * i * .025, tz + sz * (.6 + i * .05))); } }
-  gate.add(sp(.14, 10), PAL.gold, T(tx, 2.88, tz));
+  // biển tên chùa dựng trên nóc cổng, nghiêng về phía người xem
+  for (const dx of [-.62, .62]) gate.add(cy(.035, .035, .5, 8), PAL.redDk, T(tx + dx, 2.72, tz));
+  gate.add(rb(1.78, .5, .08, .05), PAL.redDk, T(tx, 3.18, tz, 0, 1, 1, 1, -.38));
+  gate.add(sp(.12, 10), PAL.gold, T(tx, 3.55, tz - .1));
+  for (const s of [-1, 1]) gate.add(sp(.07, 8), PAL.gold, T(tx + s * .92, 3.2, tz));
 
   // texture: hoành phi, câu đối, biển hiệu
   const addTex = (cv, w, h, m, em = .35, frame) => { const tex = R.texture(cv); if (frame) world.add(frame[0], frame[1], frame[2]); texItems.push({ mesh: R.mesh(new Geo().add(P.quad(w, h), '#ffffff')), m, tex, em }); };
-  addTex(signCanvas('TỔ NGHIỆP DESIGNER', 1024, 180), 2.9, .5, T(10, 2.2, 1.42));
-  addTex(verticalSign(['CTRL+S', 'THƯỜNG', 'XUYÊN'], 120, 420), .34, 1.2, T(7.6, 1.85, 1.42));
-  addTex(verticalSign(['FILE', 'GỐC', 'MÃI CÒN'], 120, 420), .34, 1.2, T(12.4, 1.85, 1.42));
-  addTex(signCanvas('HỆ SINH THÁI PIKLAB', 900, 120, { serif: false }), 2.4, .3, T(10, .82, 2.33), .3);
+  addTex(signCanvas('TỔ NGHIỆP DESIGNER', 1024, 160), 2.7, .42, T(10, 2.56, 1.42));
+  addTex(verticalSign(['CTRL', '+S', 'THƯỜNG', 'XUYÊN'], 150, 600), .36, 1.44, T(7.56, 1.72, 1.43));
+  addTex(verticalSign(['FILE', 'GỐC', 'MÃI', 'CÒN'], 150, 600), .36, 1.44, T(12.44, 1.72, 1.43));
+  addTex(signCanvas('VẠN SỰ UNDO', 900, 130), 2.4, .32, T(10, .83, 2.345), .3);
   const gsign = (text, x, z) => { world.add(cy(.05, .05, .9, 8), PAL.woodDk, T(x, 0, z)); world.add(rb(1.9, .46, .08, .05), PAL.woodDk, T(x, .95, z)); addTex(signCanvas(text, 800, 180), 1.8, .4, T(x, .95, z + .045)); };
   gsign('VƯỜN RAU PHƯỚC ĐỨC', 3.65, 7.05); gsign('VƯỜN THÚ CƯNG', 15.5, 6.78);
-  const gateSign = { mesh: R.mesh(new Geo().add(P.quad(1.5, .3), '#ffffff')), m: T(tx, 2.1, tz + .18), tex: R.texture(signCanvas('TAM QUAN PIKLAB', 800, 160)), em: .35 };
+  const gateSign = { mesh: R.mesh(new Geo().add(P.quad(1.66, .4), '#ffffff', T(0, 0, .045))), m: T(tx, 3.18, tz, 0, 1, 1, 1, -.38), tex: R.texture(signCanvas('CHÙA BA PHẢI', 800, 160)), em: .35 };
 
   return {
     world: { mesh: R.mesh(world) }, glow: { mesh: R.mesh(glow), em: .9, noShadow: true },
@@ -345,11 +354,17 @@ function avatarMeshes(R, color, hat) {
   const sitBody = mk(g => { g.add(sp(.3, 14), color, T(0, .14, 0, 0, 1, .5, 1)); g.add(P.lathe([[.0, .1], [.2, .1], [.17, .4], [.12, .5], [0, .52]], 16), color, T(0, 0, 0)); g.add(sp(.06, 8), PAL.skin, T(-.05, .36, .17)); g.add(sp(.06, 8), PAL.skin, T(.05, .36, .17)); });
   const head = mk(g => {
     g.add(sp(.27, 16), PAL.skin, T(0, 0, 0));
-    if (hat !== 'non') g.add(sp(.285, 14), PAL.hair, T(0, .05, -.05, 0, 1, .95, .98));
+    if (hat === 'none' || hat === 'headphone') g.add(sp(.285, 14), PAL.hair, T(0, .05, -.05, 0, 1, .95, .98));
+    if (hat === 'beanie') { g.add(sp(.275, 12), PAL.hair, T(0, -.02, -.07, 0, 1, .9, .9)); }
     for (const s of [-1, 1]) { g.add(sp(.038, 8), '#2a1a10', T(s * .09, -.01, .245, 0, 1, 1.25, .6)); g.add(sp(.012, 4), '#ffffff', T(s * .09 + .012, .015, .27)); g.add(sp(.045, 8), '#f29a8f', T(s * .16, -.07, .2, 0, 1, .6, .5)); g.add(sp(.06, 8), PAL.skin, T(s * .27, -.02, 0, 0, .5, 1, .8)); }
     g.add(rb(.06, .015, .02, .007), '#7a3a2a', T(0, -.1, .262));
     if (hat === 'non') { g.add(cy(0, .4, .3, 22), '#efd28c', T(0, .15, 0)); g.add(cy(.4, .4, .015, 22), '#d4b166', T(0, .15, 0)); g.add(sp(.24, 12), PAL.hair, T(0, .04, -.04)); }
-    else if (hat === 'beanie') { g.add(sp(.3, 14), '#e8b54a', T(0, .08, -.02, 0, 1, .85, 1)); g.add(cy(.3, .3, .08, 18), '#c9902e', T(0, .03, -.02, 0, 1, 1, 1, -.15)); g.add(sp(.08, 8), '#fff4dd', T(0, .36, -.04)); }
+    else if (hat === 'beanie') {
+      g.add(P.lathe([[.302, .02], [.3, .1], [.27, .2], [.21, .28], [.12, .33], [0, .345]], 20), '#d9b45e', T(0, .09, -.01));
+      g.add(P.lathe([[.31, -.03], [.318, .0], [.318, .07], [.31, .1], [.28, .1]], 22), '#b8913f', T(0, .09, -.01));
+      for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; g.add(cy(.012, .012, .09, 4), '#a8823a', T(Math.cos(a) * .318, .095, -.01 + Math.sin(a) * .318)); }
+      g.add(sp(.075, 10), '#f6ecd9', T(0, .47, -.01));
+    }
     else if (hat === 'headphone') { for (let i = 0; i <= 10; i++) { const a = Math.PI * i / 10; g.add(sp(.035, 6), '#262626', T(Math.cos(a) * .31, Math.sin(a) * .31 + .02, 0)); } for (const s of [-1, 1]) { g.add(cy(.1, .1, .08, 14), '#e8b54a', T(s * .3, .0, 0, 0, 1, 1, 1, 0, s * 1.57)); } }
   });
   return (avCache[key] = { body, sitBody, head });
