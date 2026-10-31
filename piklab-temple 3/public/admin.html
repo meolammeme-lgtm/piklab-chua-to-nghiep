@@ -87,6 +87,7 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
   <main>
     <!-- Tổng quan -->
     <section id="tab-overview">
+      <div id="storageNote" class="note" style="margin-bottom:14px"></div>
       <div class="grid" id="kpis"></div>
       <h2>Các khuôn viên chùa đang mở <span class="muted" style="font-weight:400">— khi một chùa đủ <b id="capTxt"></b> người, chùa mới sẽ tự động được tạo</span></h2>
       <table id="roomsTbl"></table>
@@ -219,6 +220,10 @@ async function loadStats() {
   const s = await api('/api/admin/stats');
   const d = s.today;
   $('#capTxt').textContent = s.capacity;
+  $('#storageNote').innerHTML = s.storage === 'redis'
+    ? '💾 Dữ liệu đang lưu trên <b>Upstash Redis</b>: tài khoản, voucher và thống kê được giữ nguyên khi deploy lại.'
+    : '⚠️ Dữ liệu đang lưu vào <b>file trên máy chủ</b>. Nếu chạy trên Render gói miễn phí, mọi tài khoản và voucher sẽ <b>mất khi deploy lại</b>. Hãy cấu hình UPSTASH_REDIS_REST_URL và UPSTASH_REDIS_REST_TOKEN (xem README).';
+  $('#storageNote').style.background = s.storage === 'redis' ? '#e9f6ee' : '#fff1e6';
   $('#kpis').innerHTML = [
     ['🟢 Đang online', s.online, `${s.rooms.length} khuôn viên đang mở`, 'live'],
     ['Lượt truy cập hôm nay', d.visits, `Đỉnh online: ${d.peak} người`],
