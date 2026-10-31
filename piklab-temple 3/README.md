@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/34222787/README.md)
+[Uploading README.md…]()
 # 🛕 Chùa Tổ Nghiệp Designer · PikLab
 
 Web game nhiều người chơi: dân thiết kế cùng đi lại trong khuôn viên chùa, thắp hương cho các vị "tổ" (Photoshop, Illustrator, Premiere Pro, After Effects, Blender, Figma, Canva, CapCut, InDesign, Lightroom), thỉnh chuông, cuốc đất trồng rau để nhận voucher PikLab, và mang rau cho thú cưng trong chùa ăn để tích phước.
@@ -47,6 +47,31 @@ Cách hoạt động:
 Cách thay thế có trả phí: gắn **Persistent Disk** của Render (khoảng 7 USD/tháng trở lên) vào thư mục `/var/data`, rồi đặt `DATA_FILE=/var/data/db.json`.
 
 ## Tính năng
+
+**Khu chợ trước cổng chùa & hệ thống phước / sinh lực**
+
+Người chơi mới xuất hiện ở khu chợ trước cổng chùa rồi đi qua tam quan để vào chùa.
+
+- **Sinh lực (💪, tối đa 100):** mọi hoạt động đều tốn sinh lực.
+  - Thắp hương 2, cuốc đất 6, cho thú ăn 2, thỉnh chuông 1, quét lá 4, gieo quẻ 3, khẩu nghiệp 2, kéo co 8.
+  - Sinh lực tự hồi 1 điểm mỗi 90 giây; muốn hồi nhanh thì ra **Quán Ăn Vỉa Hè**.
+- **Phước (🍀):** tài khoản mới được tặng 20 phước (chỉnh trong admin).
+  - Kiếm phước: thắp hương, cho thú ăn, quét lá đa, thắng kéo co.
+  - Tiêu phước: gieo quẻ, khẩu nghiệp, mua đồ, cắt tóc, ăn uống, cược kéo co.
+- **Cây đa đầu chợ:** quét 12 ụ lá đa quanh gốc, mỗi ụ +2 phước. Lá rụng lại sau 45 giây.
+- **Am Gieo Quẻ:** tốn phước, nhận ngẫu nhiên một quẻ tiên tri hài hước. Nội dung quẻ chỉnh trong *Admin → Cài đặt*, mỗi dòng một quẻ.
+- **Bãi Khẩu Nghiệp:** bước vào sân tròn có cột loa phường thì ô chat hiện ra. Câu nói hiện thành bong bóng thoại trên đầu nhân vật cho cả chùa thấy, mỗi câu tốn phước. Chỉ được nói trong khu này, giãn cách 2,5 giây; từ cấm (admin chỉnh) tự che thành `***`.
+- **Sân Kéo Co 1-1:** ra kèo cược 5, 10, 20 hoặc 50 phước; người khác bấm *Nhận kèo*.
+  - Đếm ngược 3 giây, sau đó ai bấm **Ctrl+Z** (Mac: **⌘+Z**, điện thoại: nút KÉO) nhanh hơn sẽ kéo dây về phía mình.
+  - Kéo lệch 18 lần hoặc dẫn trước khi hết 12 giây là thắng, nhận cả phần cược của đối thủ. Hoà thì hoàn lại.
+  - Server chặn bấm quá 22 lần/giây. Ai thoát giữa trận coi như thua.
+  - Đây là trò giải trí, phước không quy đổi ra tiền.
+- **Hàng rong:**
+  - *Cô Tư* bán nón: nón quai thao, khăn xếp, khăn vấn, mũ len, tai nghe.
+  - *Cô Sáu* bán áo 8 màu: đỏ son, lục, chàm, tím than, hồng đào, xanh ngọc, đen tuyền, gấm hoàng.
+  - Đồ đã mua nằm trong **🎒 Túi → Tủ đồ**, thay bất cứ lúc nào không mất phước.
+- **Cắt Tóc Vỉa Hè:** búi tó, tóc ngắn, hoặc cạo trọc (cạo trọc thì bỏ luôn mũ nón).
+- **Quán Ăn Vỉa Hè:** trà đá, chè ba màu, bánh mì, bánh giò, bánh bèo, phở bò, bún bò Huế, cơm tấm, bún đậu mắm tôm. Món càng "chắc bụng" càng hồi nhiều sinh lực.
 
 **Tài khoản & chống spam**
 - Lần đầu vào chùa, khách đăng ký bằng **email + mật khẩu + pháp danh** (chọn luôn màu áo và phụ kiện). Những lần sau chỉ cần nhập email và mật khẩu là vào đúng nhân vật cũ. Trên cùng một máy, game còn nhớ phiên đăng nhập 60 ngày.
@@ -123,6 +148,7 @@ public/engine.js   Engine 3D WebGL2 tự viết: ánh sáng, đổ bóng mềm, 
 public/world.js    Dựng khuôn viên 3D: chánh điện, ban thờ, vườn rau, vườn thú, nhân vật
 public/game.js     Logic game, camera, điều khiển, hiệu ứng, giao diện
 public/local.js    Chế độ demo offline (giả lập server + bot)
+public/rules.js    Luật chơi dùng chung: sinh lực, giá đồ, món ăn, quẻ mặc định, kéo co
 build-demo.js      `node build-demo.js` → gộp thành 1 file DEMO.html
 public/layout.js   Bản đồ khuôn viên (dùng chung client/server)
 public/style.css   Giao diện HUD & hộp thoại
