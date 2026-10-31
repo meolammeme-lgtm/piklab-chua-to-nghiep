@@ -8,7 +8,8 @@ const mm = $('#minimap'), mctx = mm.getContext('2d');
 const K = .01;
 
 /* ---------------- Trạng thái ---------------- */
-const COLORS = ['#c0392b', '#d35400', '#8e44ad', '#2c7a7b', '#b7791f', '#2f855a', '#2b6cb0', '#6b4f3a'];
+// Bảng màu áo truyền thống: nâu sồng, lam, vàng nghệ, trắng ngà, đỏ son, lục, chàm, tím than
+const COLORS = ['#7a5a43', '#6f7d8c', '#c9902e', '#efe7d6', '#a8382c', '#4f7a5a', '#3b4f7a', '#5b4566'];
 const store = (() => { try { return window.localStorage; } catch (e) { return null; } })();
 const sget = k => { try { return store && store.getItem(k); } catch (e) { return null; } };
 const sset = (k, v) => { try { store && store.setItem(k, v); } catch (e) {} };
@@ -275,7 +276,7 @@ function findInteract(t) {
   const me = S.me, d = o => Math.hypot(me.x - o.x, me.y - o.y);
   if (d(L.altar) < L.altar.radius && me.y < 500) return { kind: 'incense', icon: '🪔', text: 'Thắp hương tổ nghiệp', x: 1000, y: 200, h: 1.9 };
   if (d(L.bowl) < L.bowl.radius) return { kind: 'incense', icon: '🪔', text: 'Thắp hương', x: L.bowl.x, y: L.bowl.y, h: 1.7 };
-  if (d(L.bell) < L.bell.radius) return { kind: 'bell', icon: '🔔', text: 'Thỉnh chuông', x: L.bell.x, y: L.bell.y, h: 3.1 };
+  if (d(L.bell) < L.bell.radius) return { kind: 'bell', icon: '🔔', text: 'Thỉnh chuông', x: L.bell.x, y: L.bell.y, h: 4.4 };
   let best = null, bd = 1e9;
   L.plots.forEach(p => { const dd = d(p); if (dd < L.plotRadius && dd < bd) { bd = dd; best = p; } });
   if (best) {
@@ -321,13 +322,15 @@ function avatarItems(items, p, t, isMe) {
     items.push({ mesh: am.sitBody, m: T(x, h, z, yaw) });
     items.push({ mesh: am.head, m: T(x, h + .78, z, yaw) });
   } else {
+    const pray = em && (em.e === 'pray' || em.e === 'bow') && age < 2.6;
+    const joined = pray || (isMe && S.busy && !digging);
     items.push({ mesh: am.body, m: T(x, y0, z, yaw, 1, 1, 1, tilt) });
+    // chỉ vẽ MỘT đôi tay: buông hai bên hoặc chắp trước ngực
+    items.push({ mesh: joined ? am.armsPray : am.armsSide, m: T(x, y0, z, yaw, 1, 1, 1, tilt) });
     const hx = x + sy * Math.sin(tilt) * .86, hy = y0 + Math.cos(tilt) * .86, hz = z + cyw * Math.sin(tilt) * .86;
     items.push({ mesh: am.head, m: T(hx, hy, hz, yaw + (wave ? Math.sin(t / 90) * .25 : 0), 1, 1, 1, tilt * 1.1) });
     const sw = p.moving ? Math.sin(p.walk * 11) * .12 : 0;
     for (const s of [-1, 1]) { const lx = s * .11, lz = sw * s; items.push({ mesh: dyn.feet, m: T(x + cyw * lx + sy * lz, h, z - sy * lx + cyw * lz, yaw) }); }
-    const pray = em && (em.e === 'pray' || em.e === 'bow') && age < 2.6;
-    if (pray || (isMe && S.busy && !digging)) items.push({ mesh: dyn.hands, m: T(x + sy * (.24 + Math.sin(tilt) * .4), y0 + .48 - tilt * .1, z + cyw * (.24 + Math.sin(tilt) * .4), yaw) });
     if (digging) { const a = Math.sin((t - S.digAnim) / 900 * Math.PI * 3); items.push({ mesh: hoe, m: T(x + sy * .35, h + .35, z + cyw * .35, yaw, 1, 1, 1, -.4 + a * .9) }); }
   }
   if (isMe) items.push({ mesh: dyn.ring, m: T(x, h + .005, z, t / 900), em: .6, noShadow: true });
@@ -335,7 +338,7 @@ function avatarItems(items, p, t, isMe) {
 const hoe = R && R.mesh(new Geo().add(P.cyl(.025, .025, .7, 6), '#8a5a33', T(0, 0, 0)).add(P.rbox(.2, .05, .12, .02, 1), '#a7adb3', T(0, .7, .05)));
 
 function frameItems(t) {
-  const items = [scene.world, scene.water, scene.glow];
+  const items = [scene.world, scene.decal, scene.water, scene.glow];
   items.push(...scene.texItems);
   plaques.forEach(p => { items.push({ mesh: plaqueBack, m: p.m }); items.push({ mesh: plaqueQuad, m: p.m, tex: p.tex, em: .22 }); });
   if (S.roofA > .02) items.push({ mesh: scene.roof.mesh, alpha: S.roofA >= .99 ? undefined : S.roofA });
@@ -669,7 +672,7 @@ function frame(t) {
   if (!S.skyT || t - S.skyT > 1000) { S.skyT = t; applySky(); }
   updateCamera(S.me ? dt : 1);
   stepParticles(dt);
-  if (!S.noRender) { R.render(frameItems(t), cam, cam.tgt, Math.max(10, S.dist * .85)); drawOverlay(t); }
+  if (!S.noRender) { R.render(frameItems(t), cam, cam.tgt, Math.max(7, S.dist * .8)); drawOverlay(t); }
   drawMinimap();
 }
 window.PK = S;
