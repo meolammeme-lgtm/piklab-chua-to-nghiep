@@ -87,6 +87,7 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
   <main>
     <!-- Tổng quan -->
     <section id="tab-overview">
+      <div id="pwNote" class="note hidden" style="margin-bottom:10px;background:#fde2dd;border-color:#e9a296;color:#8c2b1e"></div>
       <div id="storageNote" class="note" style="margin-bottom:14px"></div>
       <div class="grid" id="kpis"></div>
       <h2>Các khuôn viên chùa đang mở <span class="muted" style="font-weight:400">— khi một chùa đủ <b id="capTxt"></b> người, chùa mới sẽ tự động được tạo</span></h2>
@@ -158,6 +159,8 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
         <label>Giãn cách thắp hương (giây) <input name="incenseCooldownSec" type="number" min="0"></label>
         <label>Link hệ sinh thái PikLab <input name="shopUrl"></label>
       </div>
+      <h2>Bảo mật</h2>
+      <p id="ipNote" class="muted" style="font-size:13px">Mở tab Tổng quan để xem IP server nhận được.</p>
       <h2>Phước &amp; khu chợ</h2>
       <div class="form" id="eForm">
         <label>Phước tặng khi tạo tài khoản <input name="startPhuoc" type="number" min="0"></label>
@@ -192,7 +195,7 @@ async function api(path, opt = {}) {
   if (r.status === 401) { logout(); throw new Error('401'); }
   return r.json();
 }
-function logout() { token = ''; sessionStorage.removeItem('pk_admin'); $('#app').classList.add('hidden'); $('#loginView').classList.remove('hidden'); }
+function logout() { if (token) fetch('/api/admin/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(() => {}); token = ''; sessionStorage.removeItem('pk_admin'); $('#app').classList.add('hidden'); $('#loginView').classList.remove('hidden'); }
 $('#logout').onclick = e => { e.preventDefault(); logout(); };
 async function login() {
   const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: $('#pw').value }) });
@@ -235,6 +238,11 @@ async function loadStats() {
   $('#storageNote').innerHTML = s.storage === 'redis'
     ? '💾 Dữ liệu đang lưu trên <b>Upstash Redis</b>: tài khoản, voucher và thống kê được giữ nguyên khi deploy lại.'
     : '⚠️ Dữ liệu đang lưu vào <b>file trên máy chủ</b>. Nếu chạy trên Render gói miễn phí, mọi tài khoản và voucher sẽ <b>mất khi deploy lại</b>. Hãy cấu hình UPSTASH_REDIS_REST_URL và UPSTASH_REDIS_REST_TOKEN (xem README).';
+  const pw = $('#pwNote');
+  pw.classList.toggle('hidden', !s.adminPwDefault && !s.adminPwWeak);
+  pw.innerHTML = s.adminPwDefault ? '🚨 <b>Trang quản trị đang dùng mật khẩu mặc định</b>, ai đọc README cũng đăng nhập được và xem được email người chơi. Vào Render → Environment, thêm biến <b>ADMIN_PASSWORD</b> với mật khẩu dài, khó đoán, rồi deploy lại.'
+    : '⚠️ Mật khẩu quản trị ngắn hơn 10 ký tự. Nên đổi biến <b>ADMIN_PASSWORD</b> trên Render sang mật khẩu dài hơn.';
+  ipHtml = `IP server nhận được từ máy bạn: <b>${esc(s.yourIp)}</b> (nguồn: ${esc(s.ipSource)}). Nếu IP này khác IP thật của bạn hoặc nguồn là "socket" khi chạy trên Render, giới hạn theo IP có thể chưa chính xác.`; $('#ipNote').innerHTML = ipHtml;
   $('#storageNote').style.background = s.storage === 'redis' ? '#e9f6ee' : '#fff1e6';
   $('#kpis').innerHTML = [
     ['🟢 Đang online', s.online, `${s.rooms.length} khuôn viên đang mở`, 'live'],
@@ -352,7 +360,9 @@ let cfg = null;
 function altarRow(a) {
   return `<div class="altar-row"><input value="${esc(a.id)}" data-k="id"><input value="${esc(a.name)}" data-k="name"><input value="${esc(a.short)}" data-k="short" maxlength="3"><input type="color" value="${esc(a.color)}" data-k="color"><div style="display:flex;gap:6px;align-items:center">${a.image ? `<img src="${esc(a.image)}" style="width:34px;height:34px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid #ecdfc8">` : ''}<input type="hidden" value="${esc(a.image)}" data-k="image"><label class="btn sm gray" style="white-space:nowrap">⬆ Tải icon<input type="file" accept="image/*" data-up hidden></label>${a.image ? '<button class="btn sm ghost" data-clr>Bỏ</button>' : ''}</div><button class="btn sm ghost" data-rm>✕</button></div>`;
 }
+let ipHtml = '';
 async function loadCfg() {
+  if (ipHtml) $('#ipNote').innerHTML = ipHtml;
   cfg = await api('/api/admin/config');
   const f = $('#cForm'); ['templeName', 'roomCapacity', 'digsPerDay', 'maxAccountsPerIpPerDay', 'plotRegrowSec', 'incenseCooldownSec', 'shopUrl'].forEach(k => f.querySelector(`[name=${k}]`).value = cfg[k]);
   $('#altarRows').innerHTML = cfg.altar.map(altarRow).join('');
