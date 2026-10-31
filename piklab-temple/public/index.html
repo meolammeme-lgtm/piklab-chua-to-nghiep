@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1b1a12">
+<title>Chùa Tổ Nghiệp Designer · PikLab</title>
+<meta name="description" content="Ngôi chùa online cho dân thiết kế: thắp hương tổ nghiệp, đào rau nhận voucher PikLab, cho thú cưng ăn tích phước.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Noto+Serif:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="hud-tl">
+    <button id="roomBtn" class="chip glass"><span class="dot"></span><b id="roomName">Chùa 1</b> · <span id="roomCount">0</span>/<span id="roomCap">30</span> người</button>
+    <div id="roomList" class="glass pop hidden"></div>
+  </div>
+  <div class="hud-tr">
+    <div class="chip glass" title="Điểm phước">🍀 <b id="phuoc">0</b></div>
+    <div class="chip glass" title="Bó rau trong túi">🥬 <b id="rau">0</b></div>
+    <div class="chip glass" title="Lượt đào hôm nay">⛏️ <b id="digs">3</b></div>
+    <button id="bagBtn" class="chip glass btn">🎒 Túi</button>
+    <button id="soundBtn" class="chip glass btn" title="Âm thanh">🔔</button>
+  </div>
+  <div id="ticker"></div>
+  <div class="hud-bl">
+    <button class="emote glass" data-e="pray" title="Chắp tay">🙏</button>
+    <button class="emote glass" data-e="bow" title="Vái lạy">🙇</button>
+    <button class="emote glass" data-e="zen" title="Tĩnh tâm">🧘</button>
+    <button class="emote glass" data-e="heart" title="Thương">💛</button>
+    <button class="emote glass" data-e="wave" title="Chào">👋</button>
+  </div>
+  <button id="actionBtn" class="hidden"><span id="actionIcon">🪔</span><span id="actionText">Thắp hương</span><kbd>E</kbd></button>
+  <canvas id="minimap" class="glass" width="200" height="150" title="Bấm để đi tới"></canvas>
+  <div id="hint" class="glass">Đi lại: <kbd>W A S D</kbd> / phím mũi tên hoặc <b>chạm vào nơi muốn đến</b> · Tương tác: <kbd>E</kbd></div>
+</div>
+
+<!-- Màn hình vào chùa -->
+<div id="intro" class="modal-wrap">
+  <div class="card intro">
+    <div class="intro-art">🛕</div>
+    <p class="eyebrow">PikLab presents</p>
+    <h1 id="templeTitle">Chùa Tổ Nghiệp Designer</h1>
+    <p class="lead">Thắp một nén hương cho các vị tổ Photoshop, Illustrator, Blender… cầu khách duyệt file ngay lần đầu. Ra vườn cuốc đất trồng rau — biết đâu đào trúng voucher PikLab.</p>
+    <label>Pháp danh của bạn</label>
+    <input id="nameInput" maxlength="18" placeholder="VD: Thích Kéo Layer" autocomplete="off">
+    <label>Màu áo</label>
+    <div id="colorPick" class="swatches"></div>
+    <label>Phụ kiện</label>
+    <div id="hatPick" class="hats">
+      <button data-h="none" class="sel">Không</button>
+      <button data-h="non">Nón lá</button>
+      <button data-h="beanie">Mũ len</button>
+      <button data-h="headphone">Tai nghe</button>
+    </div>
+    <button id="enterBtn" class="primary">Bước vào chùa 🙏</button>
+    <p id="liveInfo" class="muted small"></p>
+  </div>
+</div>
+
+<!-- Thắp hương -->
+<div id="incenseModal" class="modal-wrap hidden">
+  <div class="card">
+    <button class="x" data-close>✕</button>
+    <h2>🪔 Thắp hương tổ nghiệp</h2>
+    <p class="muted">Chọn vị tổ bạn muốn cầu</p>
+    <div id="appGrid" class="app-grid"></div>
+    <label>Lời nguyện (mọi người trong chùa sẽ thấy)</label>
+    <input id="wishInput" maxlength="70" placeholder="Cầu cho khách duyệt bản đầu tiên…">
+    <div class="wish-chips" id="wishChips"></div>
+    <button id="lightBtn" class="primary">Thắp hương</button>
+  </div>
+</div>
+
+<!-- Kết quả đào -->
+<div id="resultModal" class="modal-wrap hidden">
+  <div class="card result" id="resultCard"></div>
+</div>
+
+<!-- Túi đồ -->
+<div id="bagModal" class="modal-wrap hidden">
+  <div class="card">
+    <button class="x" data-close>✕</button>
+    <h2>🎒 Túi đồ của bạn</h2>
+    <div id="bagBody"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="conn" class="hidden">Đang kết nối lại với chùa…</div>
+
+<script src="layout.js"></script>
+<script src="game.js"></script>
+</body>
+</html>

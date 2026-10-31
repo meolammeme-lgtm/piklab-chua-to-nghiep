@@ -1,0 +1,9 @@
+{
+  "name": "piklab-chua-to-nghiep",
+  "version": "1.0.0",
+  "description": "Chùa Tổ Nghiệp Designer – web game thắp hương, đào rau nhận voucher PikLab",
+  "main": "server.js",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" },
+  "license": "UNLICENSED"
+}
