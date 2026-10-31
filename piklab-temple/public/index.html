@@ -12,6 +12,7 @@
 </head>
 <body>
 <canvas id="game"></canvas>
+<canvas id="overlay"></canvas>
 
 <!-- HUD -->
 <div id="hud" class="hidden">
@@ -25,6 +26,7 @@
     <div class="chip glass" title="Lượt đào hôm nay">⛏️ <b id="digs">3</b></div>
     <button id="bagBtn" class="chip glass btn">🎒 Túi</button>
     <button id="soundBtn" class="chip glass btn" title="Âm thanh">🔔</button>
+    <button id="demoBtn" class="chip glass btn hidden" title="Cài đặt bản demo">⚙️ Demo</button>
   </div>
   <div id="ticker"></div>
   <div class="hud-bl">
@@ -36,7 +38,7 @@
   </div>
   <button id="actionBtn" class="hidden"><span id="actionIcon">🪔</span><span id="actionText">Thắp hương</span><kbd>E</kbd></button>
   <canvas id="minimap" class="glass" width="200" height="150" title="Bấm để đi tới"></canvas>
-  <div id="hint" class="glass">Đi lại: <kbd>W A S D</kbd> / phím mũi tên hoặc <b>chạm vào nơi muốn đến</b> · Tương tác: <kbd>E</kbd></div>
+  <div id="hint" class="glass">Đi lại: <kbd>W A S D</kbd> / phím mũi tên hoặc <b>chạm vào nơi muốn đến</b> · Tương tác: <kbd>E</kbd> · Thu phóng: cuộn chuột / <kbd>+</kbd> <kbd>−</kbd></div>
 </div>
 
 <!-- Màn hình vào chùa -->
@@ -90,10 +92,22 @@
   </div>
 </div>
 
+<!-- Cài đặt demo -->
+<div id="demoModal" class="modal-wrap hidden">
+  <div class="card">
+    <button class="x" data-close>✕</button>
+    <h2>⚙️ Cài đặt bản demo</h2>
+    <div id="demoBody"></div>
+  </div>
+</div>
+
 <div id="toast"></div>
 <div id="conn" class="hidden">Đang kết nối lại với chùa…</div>
 
 <script src="layout.js"></script>
+<script src="engine.js"></script>
+<script src="world.js"></script>
+<script src="local.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
