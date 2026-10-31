@@ -2,7 +2,8 @@
  * Chùa Tổ Nghiệp Designer — PikLab
  * Server Node.js thuần, không cần cài thư viện (npm install không bắt buộc).
  * Chạy:  node server.js     (mặc định cổng 3000)
- * Biến môi trường: PORT, ADMIN_PASSWORD, DATA_FILE
+ * Biến môi trường: PORT, ADMIN_PASSWORD, DATA_FILE,
+ *   UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN (lưu dữ liệu bền vững, không mất khi deploy lại)
  */
 const http = require('http');
 const fs = require('fs');
@@ -53,25 +54,84 @@ function freshDb() {
 }
 
 let db;
-try {
-  db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+function normalizeDb(d) {
   const f = freshDb();
-  db.config = Object.assign(f.config, db.config || {});
-  for (const k of Object.keys(f)) if (db[k] === undefined) db[k] = f[k];
-  db.totals = Object.assign(f.totals, db.totals);
-} catch (e) {
-  db = freshDb();
+  d.config = Object.assign(f.config, d.config || {});
+  for (const k of Object.keys(f)) if (d[k] === undefined || d[k] === null) d[k] = f[k];
+  d.totals = Object.assign(f.totals, d.totals);
+  return d;
 }
-let dirty = true;
+try { db = normalizeDb(JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'))); } catch (e) { db = freshDb(); }
+
+/* ---------- Lưu trữ: Upstash Redis (bền vững) hoặc file JSON ----------
+ * Render gói miễn phí xoá ổ đĩa mỗi lần deploy → nếu có biến UPSTASH_* thì dữ liệu được lưu
+ * lên Redis, chỉ gửi những phần thay đổi (tiết kiệm lượt gọi của gói free). */
+const REDIS_URL = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/+$/, '');
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
+const USE_REDIS = !!(REDIS_URL && REDIS_TOKEN);
+const RK = 'piklab:';
+const HASH_COLLS = ['accounts', 'players', 'sessions', 'daily', 'hourly'];   // object { key: value }
+const STR_COLLS = ['config', 'vouchers', 'totals'];
+const savedCache = {};                                                     // bản đã lưu gần nhất (JSON)
+async function redis(cmds) {
+  const r = await fetch(REDIS_URL + '/pipeline', { method: 'POST', headers: { Authorization: 'Bearer ' + REDIS_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(cmds) });
+  if (!r.ok) throw new Error('Redis HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
+  const out = await r.json();
+  const err = out.find(x => x && x.error); if (err) throw new Error('Redis: ' + err.error);
+  return out.map(x => x.result);
+}
+const pairs = arr => { const o = {}; for (let i = 0; i < (arr || []).length; i += 2) o[arr[i]] = arr[i + 1]; return o; };
+async function loadFromRedis() {
+  const res = await redis([...STR_COLLS.map(c => ['GET', RK + c]), ...HASH_COLLS.map(c => ['HGETALL', RK + c]), ['HGETALL', RK + 'awards']]);
+  if (res[0] == null) return false;                                       // Redis còn trống
+  const d = {};
+  STR_COLLS.forEach((c, i) => { savedCache[c] = res[i]; d[c] = res[i] ? JSON.parse(res[i]) : undefined; });
+  HASH_COLLS.forEach((c, i) => { const h = pairs(res[STR_COLLS.length + i]); savedCache[c] = h; d[c] = {}; for (const k in h) d[c][k] = JSON.parse(h[k]); });
+  const aw = pairs(res[res.length - 1]); savedCache.awards = aw;
+  d.awards = Object.values(aw).map(v => JSON.parse(v)).sort((a, b) => a.time - b.time);
+  db = normalizeDb(d);
+  return true;
+}
+function diffCommands() {
+  const cmds = [];
+  for (const c of STR_COLLS) { const j = JSON.stringify(db[c]); if (j !== savedCache[c]) { cmds.push({ cmd: ['SET', RK + c, j], apply: () => { savedCache[c] = j; } }); } }
+  const hashDiff = (c, entries) => {
+    const prev = savedCache[c] || {}, next = {}, set = [], del = [];
+    for (const [k, v] of entries) { const j = JSON.stringify(v); next[k] = j; if (prev[k] !== j) set.push(k, j); }
+    for (const k in prev) if (!(k in next)) del.push(k);
+    let chunk = [], size = 0;                                              // chia nhỏ để mỗi request < 4MB
+    const flush = () => { if (!chunk.length) return; const part = chunk; cmds.push({ cmd: ['HSET', RK + c, ...part], apply: () => { const sc = savedCache[c] = savedCache[c] || {}; for (let i = 0; i < part.length; i += 2) sc[part[i]] = part[i + 1]; } }); chunk = []; size = 0; };
+    for (let i = 0; i < set.length; i += 2) { chunk.push(set[i], set[i + 1]); size += set[i + 1].length; if (size > 3e6) flush(); }
+    flush();
+    if (del.length) cmds.push({ cmd: ['HDEL', RK + c, ...del], apply: () => { const sc = savedCache[c] || {}; del.forEach(k => delete sc[k]); } });
+  };
+  for (const c of HASH_COLLS) hashDiff(c, Object.entries(db[c] || {}));
+  hashDiff('awards', db.awards.map(a => [a.id, a]));
+  return cmds;
+}
+let dirty = true, saving = false, soonTimer = null;
 function save() { dirty = true; }
-setInterval(() => {
-  if (!dirty) return;
-  dirty = false;
-  fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-  const tmp = DATA_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(db));
-  fs.renameSync(tmp, DATA_FILE);
-}, 2000);
+function saveSoon() { dirty = true; if (!soonTimer) soonTimer = setTimeout(() => { soonTimer = null; flushSave(); }, 1500); }
+async function flushSave() {
+  if (!dirty || saving) return;
+  dirty = false; saving = true;
+  try {
+    if (USE_REDIS) {
+      const cmds = diffCommands();
+      for (let i = 0; i < cmds.length; i += 20) { const batch = cmds.slice(i, i + 20); await redis(batch.map(x => x.cmd)); batch.forEach(x => x.apply()); }
+    } else {
+      fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+      const tmp = DATA_FILE + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(db));
+      fs.renameSync(tmp, DATA_FILE);
+    }
+  } catch (e) { dirty = true; console.error('[lưu dữ liệu] lỗi, sẽ thử lại:', e.message); }
+  saving = false;
+}
+// Redis: gom thay đổi 30 giây/lần (sự kiện quan trọng lưu ngay sau 1,5 giây). File: 2 giây/lần.
+setInterval(flushSave, USE_REDIS ? 30000 : 2000);
+// Render gửi SIGTERM trước khi tắt máy cũ khi deploy → lưu nốt trước khi thoát
+for (const sig of ['SIGTERM', 'SIGINT']) process.on(sig, async () => { console.log('[lưu dữ liệu] đang lưu trước khi tắt…'); dirty = true; saving = false; await flushSave(); process.exit(0); });
 
 // Ngày/giờ theo giờ Việt Nam (UTC+7)
 const vnNow = () => new Date(Date.now() + 7 * 3600e3).toISOString();
@@ -221,7 +281,7 @@ function broadcast(room, msg, except) {
 /* ----------------------------- Logic game ----------------------------- */
 const clean = (s, n) => String(s || '').replace(/[<>]/g, '').trim().slice(0, n);
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-const COLORS = ['#c0392b', '#d35400', '#8e44ad', '#2c7a7b', '#b7791f', '#2f855a', '#2b6cb0', '#6b4f3a'];
+const COLORS = ['#7a5a43', '#6f7d8c', '#c9902e', '#efe7d6', '#a8382c', '#4f7a5a', '#3b4f7a', '#5b4566'];
 
 function rollVoucher(pid) {
   const p = db.players[pid];
@@ -244,13 +304,14 @@ function giveVoucher(v, pid, name, room) {
   v.given++;
   const award = { id: crypto.randomUUID(), voucherId: v.id, title: v.title, description: v.description, link: v.link || db.config.shopUrl, code, pid, name, room, time: Date.now() };
   db.awards.push(award);
+  saveSoon();
   db.players[pid].wins.push(award.id);
   bump('wins');
   return award;
 }
 
 /* ----------------------------- Tài khoản & chống spam ----------------------------- */
-const HATS = ['none', 'non', 'beanie', 'headphone'];
+const HATS = ['none', 'bald', 'non', 'khan', 'beanie', 'headphone'];
 const EMAIL_RE = /^[^\s@<>]{1,64}@[^\s@<>]{1,190}\.[a-z]{2,24}$/i;
 const hashPw = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
 const normName = n => n.toLowerCase().normalize('NFC').replace(/\s+/g, ' ').trim();
@@ -302,7 +363,7 @@ async function handleAuth(p, req, res, ip) {
       salt, hash: hashPw(b.password, salt), createdAt: Date.now(), lastLogin: Date.now(), ip, lastIp: ip, banned: false, logins: 1
     };
     today().registers = (today().registers || 0) + 1; db.totals.registers = (db.totals.registers || 0) + 1;
-    save();
+    saveSoon();
     return json(res, 200, { token: newSession(acc), account: pubAccount(acc) });
   }
   if (p === '/api/auth/login') {
@@ -513,7 +574,7 @@ function statsPayload() {
   return {
     online: totalOnline(), rooms: roomList(), capacity: db.config.roomCapacity,
     today: days[days.length - 1], days, hours, totals: db.totals,
-    players: Object.keys(db.players).length, accounts: Object.keys(db.accounts).length, totalRate,
+    players: Object.keys(db.players).length, accounts: Object.keys(db.accounts).length, totalRate, storage: USE_REDIS ? 'redis' : 'file',
     lastWins: db.awards.slice(-8).reverse().map(a => ({ name: a.name, title: a.title, code: a.code, time: a.time, room: a.room }))
   };
 }
@@ -535,6 +596,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { token: t });
     }
     if (!isAdmin(req)) return json(res, 401, { error: 'Chưa đăng nhập' });
+    if (req.method !== 'GET') res.on('finish', saveSoon);   // thay đổi từ admin được lưu ngay
 
     if (p === '/api/admin/stats') return json(res, 200, statsPayload());
     if (p === '/api/admin/config' && req.method === 'GET') return json(res, 200, db.config);
@@ -642,7 +704,20 @@ server.on('upgrade', (req, socket) => {
   if (ws) handleClient(ws, req);
 });
 
-server.listen(PORT, () => {
-  console.log(`🛕  ${db.config.templeName} đang mở cửa: http://localhost:${PORT}`);
-  console.log(`🔐  Trang quản trị: http://localhost:${PORT}/admin  (mật khẩu: biến ADMIN_PASSWORD)`);
-});
+(async () => {
+  if (USE_REDIS) {
+    try {
+      const had = await loadFromRedis();
+      console.log(had ? `💾  Đã tải dữ liệu từ Upstash Redis (${Object.keys(db.accounts).length} tài khoản)` : '💾  Upstash Redis đang trống — sẽ lưu dữ liệu hiện có lên Redis');
+      if (!had) saveSoon();
+    } catch (e) {
+      console.error('❌  Không kết nối được Upstash Redis:', e.message);
+      console.error('    Kiểm tra lại UPSTASH_REDIS_REST_URL và UPSTASH_REDIS_REST_TOKEN. Server dừng để tránh ghi đè dữ liệu.');
+      process.exit(1);
+    }
+  } else console.log(`💾  Lưu dữ liệu vào file ${DATA_FILE} (chưa cấu hình Upstash Redis)`);
+  server.listen(PORT, () => {
+    console.log(`🛕  ${db.config.templeName} đang mở cửa: http://localhost:${PORT}`);
+    console.log(`🔐  Trang quản trị: http://localhost:${PORT}/admin  (mật khẩu: biến ADMIN_PASSWORD)`);
+  });
+})();
