@@ -17,7 +17,7 @@ Cần **Node.js 18 trở lên**. Không cần `npm install`, vì dự án không
 ```bash
 node server.js
 # Game:   http://localhost:3000
-# Admin:  http://localhost:3000/admin   (mật khẩu mặc định: piklab@2026)
+# Admin:  http://localhost:3000/admin   (mật khẩu mặc định: ABC)
 ```
 
 Biến môi trường:
@@ -25,7 +25,7 @@ Biến môi trường:
 | Biến | Mặc định | Ý nghĩa |
 |---|---|---|
 | `PORT` | `3000` | Cổng chạy |
-| `ADMIN_PASSWORD` | `piklab@2026` | **Hãy đổi khi đưa lên mạng** |
+| `ADMIN_PASSWORD` | `ABC` | **Hãy đổi khi đưa lên mạng** |
 | `DATA_FILE` | `data/db.json` | Nơi lưu voucher, người chơi, thống kê (khi không dùng Redis) |
 | `UPSTASH_REDIS_REST_URL` | (trống) | Lưu dữ liệu bền vững trên Upstash Redis |
 | `UPSTASH_REDIS_REST_TOKEN` | (trống) | Token đi kèm URL ở trên |
