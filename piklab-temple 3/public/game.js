@@ -303,7 +303,7 @@ function doInteract() {
     setTimeout(() => send({ t: 'dig', plot: it.plot }), 900);
     setTimeout(() => { S.busy = false; }, 6000);
   } else if (it.kind === 'feed') {
-    if (!S.profile || S.profile.rau <= 0) return toast('Bạn chưa có bó rau nào — ra Vườn Rau Phước Đức cuốc đất nhé 🥬');
+    if (!S.profile || S.profile.rau <= 0) return toast('Bạn chưa có bó rau nào — ra Vườn Farm Phước Đức cuốc đất nhé 🥬');
     send({ t: 'feed', animal: it.animal, ax: it.ax, ay: it.ay });
   } else if (it.kind === 'wait') toast('Luống này vừa được đào, đợi rau mọc lại hoặc tìm luống khác nhé 🌱');
 }
