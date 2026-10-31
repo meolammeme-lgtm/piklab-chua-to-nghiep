@@ -14,6 +14,45 @@ const RULES = require('./public/rules.js');
 
 const PORT = process.env.PORT || 3000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'piklab@2026';
+const ADMIN_PW_DEFAULT = !process.env.ADMIN_PASSWORD;
+const ADMIN_PW_WEAK = ADMIN_PASSWORD.length < 10;
+
+/* ---------- Bảo mật: IP thật của người dùng ----------
+ * Render đặt Cloudflare phía trước: CF-Connecting-IP / True-Client-IP do Cloudflare ghi đè, người dùng không giả được.
+ * KHÔNG tin X-Forwarded-For do người dùng tự gửi. Có thể đổi header tin cậy bằng biến môi trường IP_HEADER. */
+const IP_HEADER = (process.env.IP_HEADER || '').toLowerCase();
+function clientIp(req) {
+  const h = req.headers;
+  for (const name of [IP_HEADER, 'cf-connecting-ip', 'true-client-ip'].filter(Boolean)) {
+    const v = String(h[name] || '').split(',')[0].trim();
+    if (v) return v.slice(0, 64);
+  }
+  return String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+}
+function ipSource(req) {
+  for (const name of [IP_HEADER, 'cf-connecting-ip', 'true-client-ip'].filter(Boolean)) if (req.headers[name]) return name;
+  return 'socket';
+}
+
+/* ---------- Bảo mật: header cho mọi phản hồi ---------- */
+function secHeaders(req, res) {
+  const host = String(req.headers.host || '').replace(/[^\w.:-]/g, '');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Content-Security-Policy', [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com data:",
+    "img-src 'self' data: blob: https:",
+    `connect-src 'self' wss://${host} ws://${host}`,
+    "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'"
+  ].join('; '));
+  if (req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=15552000');
+}
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'db.json');
 const PUBLIC = path.join(__dirname, 'public');
 
@@ -376,7 +415,7 @@ setInterval(() => { const now = Date.now(); let n = 0; for (const t in db.sessio
 
 async function handleAuth(p, req, res, ip) {
   if (hit('auth:' + ip, 40, 60e3)) return json(res, 429, { error: 'Bạn thao tác quá nhanh, vui lòng thử lại sau 1 phút.' });
-  const b = await readBody(req);
+  const b = await readBody(req, 20000);
   const email = String(b.email || '').trim().toLowerCase();
   if (p === '/api/auth/register') {
     const name = clean(b.name, 18).replace(/\s+/g, ' ');
@@ -417,12 +456,23 @@ async function handleAuth(p, req, res, ip) {
 }
 
 function handleClient(ws, req) {
-  const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+  const ip = clientIp(req);
   let me = null, room = null;
+  // đóng kết nối không đăng nhập trong 10 giây
+  const helloTimer = setTimeout(() => { if (!me) ws.close(); }, 10000);
+  // giới hạn tốc độ gửi tin: tối đa ~40 tin/giây, vượt quá 120 tin trong 1 giây thì ngắt
+  let mWin = Date.now(), mCount = 0;
 
   ws.onmessage = text => {
+    const nowM = Date.now();
+    if (nowM - mWin > 1000) { mWin = nowM; mCount = 0; }
+    if (++mCount > 120) { console.warn('[bảo mật] ngắt kết nối gửi tin quá nhanh từ', ip); return ws.close(); }
+    if (mCount > 40) return;
+    if (text.length > 4000) return;
     let m; try { m = JSON.parse(text); } catch (e) { return; }
+    if (!m || typeof m !== 'object') return;
     if (!me && m.t !== 'hello') return;
+    if (m.t === 'hello') clearTimeout(helloTimer);
     switch (m.t) {
       case 'hello': {
         if (me) return;
@@ -654,6 +704,7 @@ function handleClient(ws, req) {
     }
   };
   ws.onclose = () => {
+    clearTimeout(helloTimer);
     if (me && room) {
       room.tug.offers.delete(me.id);
       const mt = room.tug.match; if (mt && (mt.a === me.id || mt.b === me.id)) endTug(room, mt.a === me.id ? mt.b : mt.a, true);
@@ -717,10 +768,11 @@ function isAdmin(req) {
   const exp = tokens.get(t);
   return exp && exp > Date.now();
 }
-function readBody(req) {
+function readBody(req, max = 6e6) {
   return new Promise(resolve => {
     let data = '';
-    req.on('data', c => { data += c; if (data.length > 6e6) req.destroy(); });
+    req.on('close', () => resolve({}));
+    req.on('data', c => { data += c; if (data.length > max) { data = ''; req.destroy(); } });
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch (e) { resolve({}); } });
   });
 }
@@ -749,31 +801,44 @@ function statsPayload() {
   return {
     online: totalOnline(), rooms: roomList(), capacity: db.config.roomCapacity,
     today: days[days.length - 1], days, hours, totals: db.totals,
-    players: Object.keys(db.players).length, accounts: Object.keys(db.accounts).length, totalRate, storage: USE_REDIS ? 'redis' : 'file',
+    players: Object.keys(db.players).length, accounts: Object.keys(db.accounts).length, totalRate, adminPwDefault: ADMIN_PW_DEFAULT, adminPwWeak: ADMIN_PW_WEAK, storage: USE_REDIS ? 'redis' : 'file',
     lastWins: db.awards.slice(-8).reverse().map(a => ({ name: a.name, title: a.title, code: a.code, time: a.time, room: a.room }))
   };
 }
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://x');
+  secHeaders(req, res);
+  let url; try { url = new URL(req.url, 'http://x'); } catch (e) { res.writeHead(400); return res.end(); }
   const p = url.pathname;
 
   if (p.startsWith('/api/')) {
-    if (p.startsWith('/api/auth/') && req.method === 'POST') return handleAuth(p, req, res, (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim());
+    if (p.startsWith('/api/auth/') && req.method === 'POST') return handleAuth(p, req, res, clientIp(req));
     if (p === '/api/public/info') {
       return json(res, 200, { online: totalOnline(), rooms: roomList(), templeName: db.config.templeName, recent: db.awards.slice(-6).reverse().map(a => ({ name: a.name.slice(0, 2) + '***', title: a.title })) });
     }
     if (p === '/api/admin/login' && req.method === 'POST') {
-      const b = await readBody(req);
-      if (b.password !== ADMIN_PASSWORD) return json(res, 401, { error: 'Sai mật khẩu' });
+      const ip = clientIp(req);
+      if (peek('adminfail:' + ip, 15 * 60e3) >= 5) return json(res, 429, { error: 'Sai mật khẩu quá 5 lần. Thử lại sau 15 phút.' });
+      if (peek('adminfail:all', 60 * 60e3) >= 40) return json(res, 429, { error: 'Trang quản trị đang tạm khoá do có nhiều lần đăng nhập sai. Thử lại sau ít phút.' });
+      const b = await readBody(req, 2000);
+      const dg = x => crypto.createHash('sha256').update(String(x || '')).digest();
+      if (!crypto.timingSafeEqual(dg(b.password), dg(ADMIN_PASSWORD))) {
+        hit('adminfail:' + ip, 1e9, 15 * 60e3); hit('adminfail:all', 1e9, 60 * 60e3);
+        console.warn('[bảo mật] đăng nhập admin sai từ', ip);
+        return json(res, 401, { error: 'Sai mật khẩu' });
+      }
+      limits.delete('adminfail:' + ip);
+      for (const [k, exp] of tokens) if (exp < Date.now()) tokens.delete(k);
       const t = crypto.randomBytes(24).toString('hex');
       tokens.set(t, Date.now() + 12 * 3600e3);
+      console.log('[bảo mật] admin đăng nhập từ', ip);
       return json(res, 200, { token: t });
     }
+    if (p === '/api/admin/logout' && req.method === 'POST') { tokens.delete((req.headers.authorization || '').replace('Bearer ', '')); return json(res, 200, { ok: true }); }
     if (!isAdmin(req)) return json(res, 401, { error: 'Chưa đăng nhập' });
     if (req.method !== 'GET') res.on('finish', saveSoon);   // thay đổi từ admin được lưu ngay
 
-    if (p === '/api/admin/stats') return json(res, 200, statsPayload());
+    if (p === '/api/admin/stats') return json(res, 200, Object.assign(statsPayload(), { yourIp: clientIp(req), ipSource: ipSource(req) }));
     if (p === '/api/admin/config' && req.method === 'GET') return json(res, 200, db.config);
     if (p === '/api/admin/config' && req.method === 'POST') {
       const b = await readBody(req);
@@ -876,10 +941,21 @@ const server = http.createServer(async (req, res) => {
   });
 });
 
+/* ---------- Bảo mật: giới hạn kết nối WebSocket ---------- */
+const MAX_CONN_PER_IP = +process.env.MAX_CONN_PER_IP || 20, MAX_CONN_TOTAL = +process.env.MAX_CONN_TOTAL || 3000;
+const connByIp = new Map(); let connTotal = 0;
+function releaseConn(ip) { if (!connByIp.has(ip)) return; const n = connByIp.get(ip) - 1; if (n <= 0) connByIp.delete(ip); else connByIp.set(ip, n); connTotal = Math.max(0, connTotal - 1); }
 server.on('upgrade', (req, socket) => {
   if (!req.url.startsWith('/ws')) return socket.destroy();
+  const origin = req.headers.origin, host = req.headers.host;
+  if (origin && host && !origin.endsWith('//' + host)) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); return socket.destroy(); }
+  const ip = clientIp(req);
+  if ((connByIp.get(ip) || 0) >= MAX_CONN_PER_IP || connTotal >= MAX_CONN_TOTAL) { socket.write('HTTP/1.1 429 Too Many Requests\r\n\r\n'); return socket.destroy(); }
+  connByIp.set(ip, (connByIp.get(ip) || 0) + 1); connTotal++;
+  let released = false; const rel = () => { if (!released) { released = true; releaseConn(ip); } };
+  socket.on('close', rel);
   const ws = wsAccept(req, socket);
-  if (ws) handleClient(ws, req);
+  if (ws) handleClient(ws, req); else rel();
 });
 
 (async () => {
