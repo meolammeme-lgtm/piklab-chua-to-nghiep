@@ -48,7 +48,7 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5p
 #actionBtn.busy { filter: grayscale(.4); animation: none; }
 #actionIcon { font-size: 20px; }
 @keyframes breathe { 50% { box-shadow: 0 8px 40px rgba(240, 180, 70, .75), inset 0 -3px 0 rgba(0,0,0,.15); } }
-#minimap { right: 12px; bottom: max(14px, env(safe-area-inset-bottom)); border-radius: 12px; width: 180px; height: 135px; cursor: pointer; }
+#minimap { right: 12px; bottom: max(14px, env(safe-area-inset-bottom)); border-radius: 12px; width: 150px; height: auto; cursor: pointer; }
 #hint { left: 50%; top: max(60px, calc(env(safe-area-inset-top) + 50px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; font-size: 12.5px; transition: opacity 1s; white-space: nowrap; }
 #ticker { left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
 #ticker .t { background: rgba(140, 43, 30, .85); border: 1px solid rgba(255,210,140,.35); padding: 7px 14px; border-radius: 999px; font-size: 13px; animation: tin .4s ease-out; }
@@ -114,7 +114,7 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5p
 
 @media (max-width: 640px) {
   .chip { padding: 6px 9px; font-size: 12px; }
-  #minimap { width: 120px; height: 90px; }
+  #minimap { width: 100px; }
   .emote { width: 36px; height: 36px; font-size: 17px; }
   .hud-bl { bottom: 84px; }
   #hint { display: none; }
@@ -136,3 +136,42 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5p
 .back-box small { display: block; color: #8b7356; font-size: 12px; }
 .back-box b { font-size: 19px; color: var(--red); font-family: 'Noto Serif', serif; }
 .av { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px #d8c09a; flex: none; }
+
+/* ---- Sinh lực, cửa hàng, kéo co, khẩu nghiệp ---- */
+.stam .sbar { width: 54px; height: 7px; border-radius: 6px; background: rgba(255,255,255,.15); overflow: hidden; display: inline-block; }
+.stam .sbar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #e07a4f, #f2c35b, #7ec26a); transition: width .4s; }
+.stam.low .sbar i { background: #d9534f; }
+.stam.low { animation: pulseLow 1.2s infinite; }
+@keyframes pulseLow { 50% { box-shadow: 0 0 0 3px rgba(217,83,79,.45); } }
+.card.shop { width: min(520px, 100%); }
+.shop-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.shop-grid .it { border: 1.5px solid #e6d2ad; background: #fff8e8; border-radius: 14px; padding: 10px 6px; text-align: center; cursor: pointer; font: inherit; color: var(--ink); position: relative; }
+.shop-grid .it:hover { border-color: var(--gold-2); transform: translateY(-1px); }
+.shop-grid .it .ic { font-size: 26px; display: block; height: 34px; }
+.shop-grid .it .sw { width: 30px; height: 30px; border-radius: 50%; display: inline-block; border: 2px solid #fff; box-shadow: 0 0 0 1px #d8c09a; }
+.shop-grid .it b { display: block; font-size: 13px; margin-top: 4px; }
+.shop-grid .it small { color: #8b7356; font-size: 11.5px; }
+.shop-grid .it.own small { color: #2f855a; font-weight: 600; }
+.shop-grid .it.on { border-color: var(--red); box-shadow: 0 0 0 2px rgba(140,43,30,.25); }
+.shop-grid .it.poor { opacity: .55; }
+.hats button[data-hair].sel { border-color: var(--red); background: var(--red); color: #fff; }
+.tug-offer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #fff8e8; border: 1px solid #ecd9b4; margin-top: 8px; }
+.bets { display: flex; gap: 8px; margin-top: 10px; }
+.bets button { flex: 1; padding: 12px 6px; border-radius: 12px; border: 1.5px solid #e1cba3; background: #fffaf0; font-weight: 700; color: var(--red); }
+.bets button:hover { background: #fff1d6; }
+.mini-btn { border: 0; border-radius: 10px; padding: 8px 12px; background: var(--red); color: #fff; font-weight: 600; }
+#tugHud { position: fixed; left: 50%; top: 70px; transform: translateX(-50%); z-index: 15; width: min(520px, 92vw); background: rgba(30,22,14,.86); border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px 16px; text-align: center; }
+.tug-names { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+.tug-names b:first-child { color: #ff9a8a; } .tug-names b:last-child { color: #8ab8ff; }
+.tug-names span { font-size: 12px; color: #e8c878; }
+.tug-bar { position: relative; height: 16px; border-radius: 10px; margin: 10px 0; background: linear-gradient(90deg, rgba(192,57,43,.55), rgba(255,255,255,.08) 50%, rgba(47,111,179,.55)); }
+.tug-bar .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; background: #fff4dd; }
+.tug-bar i { position: absolute; top: -5px; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%; background: #f2c35b; border: 3px solid #fff4dd; left: 50%; transition: left .08s; }
+#tugMsg { font-family: 'Noto Serif', serif; font-size: 26px; font-weight: 700; color: #ffd98a; min-height: 34px; }
+#tugBtn { margin-top: 8px; width: 100%; padding: 14px; border: 0; border-radius: 14px; font-size: 18px; font-weight: 800; color: #3a1d08; background: linear-gradient(180deg, #f3c86c, #d29433); }
+#tugBtn:active { transform: scale(.97); }
+#sayBar { position: fixed; left: 50%; bottom: max(84px, calc(env(safe-area-inset-bottom) + 70px)); transform: translateX(-50%); z-index: 7; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 14px; border-radius: 999px; width: min(560px, 92vw); }
+#sayBar input { flex: 1; border: 0; background: transparent; color: #fff4dd; font: inherit; font-size: 15px; outline: none; }
+#sayBar input::placeholder { color: #c9b48a; }
+#sayBar button { border: 0; border-radius: 999px; padding: 10px 16px; font-weight: 700; background: #c0392b; color: #fff; }
+@media (max-width: 640px) { .shop-grid { grid-template-columns: repeat(2, 1fr); } .stam .sbar { width: 36px; } #sayBar { bottom: 140px; } #tugHud { top: 110px; } }
