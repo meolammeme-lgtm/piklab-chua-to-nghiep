@@ -23,6 +23,35 @@ const DEFAULT_VOUCHERS = [
   { id: 'v2', title: 'Freeship khoá học PikLab', description: 'Mã demo, chưa dùng được thật', rate: 10, prefix: 'PIKFREE' },
   { id: 'v3', title: 'Tặng 1 tháng PikLab Pro', description: 'Mã demo, chưa dùng được thật', rate: 3, prefix: 'PIKPRO' }
 ];
+/* Tài khoản demo (lưu trên máy này) */
+const h32 = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); };
+window.LocalAuth = function (kind, b) {
+  const accs = get('pk_demo_accounts', {}), sess = get('pk_demo_sessions', {});
+  const email = String(b.email || '').trim().toLowerCase();
+  const pubA = a => ({ name: a.name, color: a.color, hat: a.hat });
+  const session = a => { const t = Math.random().toString(36).slice(2) + Date.now().toString(36); sess[t] = a.email; put('pk_demo_sessions', sess); return t; };
+  if (kind === 'register') {
+    const name = String(b.name || '').replace(/[<>]/g, '').trim().slice(0, 18);
+    if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) return { error: 'Email chưa đúng định dạng.' };
+    if (String(b.password || '').length < 6) return { error: 'Mật khẩu cần ít nhất 6 ký tự.' };
+    if (name.length < 2) return { error: 'Pháp danh cần ít nhất 2 ký tự.' };
+    if (accs[email]) return { error: 'Email này đã có tài khoản — hãy chọn “Đã có tài khoản” để đăng nhập.' };
+    if (Object.values(accs).some(a => a.name.toLowerCase() === name.toLowerCase()) || BOTS.some(x => x[0].toLowerCase() === name.toLowerCase())) return { error: 'Pháp danh này đã có người dùng, hãy chọn tên khác nhé.' };
+    const a = accs[email] = { email, pid: 'demo-' + h32(email + Date.now()), name, color: b.color, hat: b.hat, hash: h32(email + ':' + b.password) };
+    put('pk_demo_accounts', accs);
+    return { token: session(a), account: pubA(a) };
+  }
+  if (kind === 'login') {
+    const a = accs[email];
+    if (!a || a.hash !== h32(email + ':' + (b.password || ''))) return { error: 'Email hoặc mật khẩu chưa đúng.' };
+    return { token: session(a), account: pubA(a) };
+  }
+  if (kind === 'me') { const a = accs[sess[b.token]]; return a ? { account: pubA(a) } : { error: 'Phiên đăng nhập đã hết hạn.' }; }
+  if (kind === 'logout') { delete sess[b.token]; put('pk_demo_sessions', sess); return { ok: true }; }
+  return { error: '?' };
+};
+const accountFromToken = t => { const accs = get('pk_demo_accounts', {}), sess = get('pk_demo_sessions', {}); return accs[sess[t]] || null; };
+
 const WISHES = ['Khách duyệt bản đầu tiên', 'Render không crash', 'Deadline lùi 1 tuần', 'In ra đúng màu', 'Không bị “logo to hơn”', 'File không corrupt', 'Lương về đúng hẹn', 'Font không lỗi'];
 const BOTS = [
   ['Thích Kéo Layer', '#2c7a7b', 'non'], ['Thích Căn Lề', '#8e44ad', 'headphone'], ['Thích Pen Tool', '#d35400', 'beanie'],
@@ -40,11 +69,11 @@ window.LocalServer = function (deliver) {
   const cfg = Object.assign({ digsPerDay: 5, regrowSec: 40 }, get('pk_demo_cfg', {}));
   const altar = get('pk_demo_altar', null) || DEFAULT_ALTAR;
   const vouchers = get('pk_demo_vouchers', null) || DEFAULT_VOUCHERS;
-  const prof = Object.assign({ phuoc: 0, rau: 0, digDay: '', digsToday: 0, wins: [] }, get('pk_demo_profile', {}));
+  let profKey = 'pk_demo_profile', prof = { phuoc: 0, rau: 0, digDay: '', digsToday: 0, wins: [] };
   const day = () => new Date().toISOString().slice(0, 10);
   const profile = () => {
     if (prof.digDay !== day()) { prof.digDay = day(); prof.digsToday = 0; }
-    put('pk_demo_profile', prof);
+    put(profKey, prof);
     return { phuoc: prof.phuoc, rau: prof.rau, digsLeft: Math.max(0, cfg.digsPerDay - prof.digsToday), digsPerDay: cfg.digsPerDay, wins: prof.wins };
   };
   const plots = L.plots.map(p => ({ id: p.id, state: 'ripe', regrowAt: 0 }));
@@ -105,11 +134,15 @@ window.LocalServer = function (deliver) {
     config: { cfg, altar, vouchers, save() { put('pk_demo_cfg', cfg); put('pk_demo_altar', altar); put('pk_demo_vouchers', vouchers); }, reset() { prof.digsToday = 0; emit({ t: 'profile', profile: profile(), msg: 'Đã hồi lại lượt đào hôm nay' }); }, defaults: { altar: DEFAULT_ALTAR, vouchers: DEFAULT_VOUCHERS } },
     send(m) {
       switch (m.t) {
-        case 'hello':
-          me = { id: 'me', name: m.name, color: m.color, hat: m.hat, x: L.spawn.x, y: L.spawn.y, dir: 1, lastIncense: 0 };
+        case 'hello': {
+          const acc = accountFromToken(m.token);
+          if (!acc) return emit({ t: 'authError', msg: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.' });
+          profKey = 'pk_demo_profile_' + acc.pid; prof = Object.assign({ phuoc: 0, rau: 0, digDay: '', digsToday: 0, wins: [] }, get(profKey, {}));
+          me = { id: 'me', name: acc.name, color: acc.color, hat: acc.hat, x: L.spawn.x, y: L.spawn.y, dir: 1, lastIncense: 0 };
           emit({ t: 'welcome', you: pub(me), room: { id: 'chua-1', name: 'Chùa 1', num: 1, capacity: 30 }, players: bots.map(pub), plots, incense, altar, templeName: 'Chùa Tổ Nghiệp Designer', shopUrl: 'https://piklab.vn', profile: profile(), pid: 'demo', rooms: rooms(), serverTime: Date.now(), regrowSec: cfg.regrowSec, demo: true });
           setTimeout(() => lightIncense(bots[1], 'ps', 'Khách duyệt bản đầu tiên'), 2500);
           break;
+        }
         case 'move': me.x = m.x; me.y = m.y; break;
         case 'emote': emit({ t: 'emote', id: 'me', e: m.e }); break;
         case 'bell': emit({ t: 'bell', by: me.name }); break;
