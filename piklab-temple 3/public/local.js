@@ -54,8 +54,8 @@ const accountFromToken = t => { const accs = get('pk_demo_accounts', {}), sess =
 
 const WISHES = ['Khách duyệt bản đầu tiên', 'Render không crash', 'Deadline lùi 1 tuần', 'In ra đúng màu', 'Không bị “logo to hơn”', 'File không corrupt', 'Lương về đúng hẹn', 'Font không lỗi'];
 const BOTS = [
-  ['Thích Kéo Layer', '#2c7a7b', 'non'], ['Thích Căn Lề', '#8e44ad', 'headphone'], ['Thích Pen Tool', '#d35400', 'beanie'],
-  ['Thích Keyframe', '#2b6cb0', 'none'], ['Thích Gradient', '#b7791f', 'non']
+  ['Thích Kéo Layer', '#7a5a43', 'bald'], ['Thích Căn Lề', '#6f7d8c', 'khan'], ['Thích Pen Tool', '#c9902e', 'bald'],
+  ['Thích Keyframe', '#3b4f7a', 'none'], ['Thích Gradient', '#efe7d6', 'non']
 ];
 const POI = {
   altar: [[1060, 420], [940, 430], [1150, 400], [860, 410]], bowl: [[1080, 700], [920, 700], [1000, 760]],
