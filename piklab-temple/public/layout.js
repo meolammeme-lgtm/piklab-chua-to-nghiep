@@ -17,18 +17,18 @@
     { id: 'cat', name: 'Mèo Mướp', x: 1470, y: 1010, range: 70 },
     { id: 'dog', name: 'Cún Vàng', x: 1730, y: 1030, range: 80 },
     { id: 'chicken', name: 'Gà Ri', x: 1590, y: 1140, range: 60 },
-    { id: 'buffalo', name: 'Trâu Đất', x: 1800, y: 1240, range: 50 },
+    { id: 'buffalo', name: 'Trâu Đất', x: 1790, y: 1170, range: 50 },
     { id: 'fish', name: 'Cá Chép Hồ Sen', x: 1620, y: 830, range: 0 }
   ];
 
   const trees = [
     [130, 180], [560, 150], [1440, 170], [1880, 160], [120, 520], [1880, 520],
-    [640, 620], [1360, 620], [110, 1300], [300, 1350], [1700, 1360], [1890, 1300],
-    [640, 1200], [1360, 1250], [120, 900]
+    [640, 620], [1360, 620], [110, 1300], [300, 1350], [1560, 1400], [1890, 1395],
+    [640, 1200], [1290, 1380], [120, 900]
   ].map(([x, y], i) => ({ x, y, kind: i % 3 }));
 
   const lanterns = [];
-  for (let y = 760; y <= 1260; y += 125) { lanterns.push({ x: 905, y }); lanterns.push({ x: 1095, y }); }
+  for (let y = 820; y <= 1320; y += 125) { lanterns.push({ x: 835, y }); lanterns.push({ x: 1165, y }); }
 
   // Vật cản (hình chữ nhật)
   const solids = [
