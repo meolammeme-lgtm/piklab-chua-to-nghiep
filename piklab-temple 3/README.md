@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/34222787/README.md)
 # 🛕 Chùa Tổ Nghiệp Designer · PikLab
 
 Web game nhiều người chơi: dân thiết kế cùng đi lại trong khuôn viên chùa, thắp hương cho các vị "tổ" (Photoshop, Illustrator, Premiere Pro, After Effects, Blender, Figma, Canva, CapCut, InDesign, Lightroom), thỉnh chuông, cuốc đất trồng rau để nhận voucher PikLab, và mang rau cho thú cưng trong chùa ăn để tích phước.
@@ -25,7 +26,25 @@ Biến môi trường:
 |---|---|---|
 | `PORT` | `3000` | Cổng chạy |
 | `ADMIN_PASSWORD` | `piklab@2026` | **Hãy đổi khi đưa lên mạng** |
-| `DATA_FILE` | `data/db.json` | Nơi lưu voucher, người chơi, thống kê |
+| `DATA_FILE` | `data/db.json` | Nơi lưu voucher, người chơi, thống kê (khi không dùng Redis) |
+| `UPSTASH_REDIS_REST_URL` | (trống) | Lưu dữ liệu bền vững trên Upstash Redis |
+| `UPSTASH_REDIS_REST_TOKEN` | (trống) | Token đi kèm URL ở trên |
+
+## Giữ dữ liệu khi deploy lại (bắt buộc nếu dùng Render gói miễn phí)
+
+Render gói miễn phí **xoá ổ đĩa mỗi lần deploy hoặc khởi động lại**. Nếu chỉ lưu vào file, mọi tài khoản, voucher và thống kê sẽ mất. Cách khắc phục miễn phí là lưu dữ liệu lên **Upstash Redis**: gói free có 256 MB và 500.000 lệnh/tháng, không cần thẻ.
+
+1. Vào https://console.upstash.com, đăng ký bằng Google hoặc GitHub, rồi bấm **Create Database**. Đặt tên bất kỳ, chọn vùng **Singapore** (gần Việt Nam và gần Render Singapore nhất), gói **Free**.
+2. Mở database vừa tạo, tìm mục **REST API** và copy 2 giá trị `UPSTASH_REDIS_REST_URL` và `UPSTASH_REDIS_REST_TOKEN`.
+3. Trên Render, vào service của game → **Environment** → **Add Environment Variable**, thêm 2 biến trên với đúng tên và giá trị. Bấm **Save, rebuild, and deploy**.
+4. Vào `/admin`. Ô thông báo màu xanh *"Dữ liệu đang lưu trên Upstash Redis"* nghĩa là đã xong.
+
+Cách hoạt động:
+- Server chỉ gửi những phần dữ liệu thay đổi, gom lại 30 giây một lần. Sự kiện quan trọng như đăng ký, trúng voucher hay thao tác admin được lưu ngay trong 1–2 giây. Khi Render tắt máy cũ để deploy, server lưu nốt trước khi thoát.
+- Lúc không có ai chơi, server không tốn lệnh Redis nào.
+- Nếu URL hoặc token sai, server sẽ **dừng lại** và báo lỗi trong tab Logs thay vì chạy với dữ liệu trống, để tránh ghi đè.
+
+Cách thay thế có trả phí: gắn **Persistent Disk** của Render (khoảng 7 USD/tháng trở lên) vào thư mục `/var/data`, rồi đặt `DATA_FILE=/var/data/db.json`.
 
 ## Tính năng
 
