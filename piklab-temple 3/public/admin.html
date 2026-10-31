@@ -187,7 +187,7 @@ async function login() {
   if (!j.token) return $('#loginErr').textContent = j.error || 'Lỗi';
   token = j.token; sessionStorage.setItem('pk_admin', token); start();
 }
-$('#loginBtn').onclick = login; $('#pw').onkeydown = e => e.key === 'Enter' && login();
+$('#loginBtn').onclick = login; $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
 let tab = 'overview';
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
