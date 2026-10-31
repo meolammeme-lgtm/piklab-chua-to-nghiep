@@ -36,6 +36,7 @@ function freshDb() {
       digsPerDay: 3,
       plotRegrowSec: 120,
       incenseCooldownSec: 20,
+      maxAccountsPerIpPerDay: 3,
       shopUrl: 'https://piklab.vn',
       templeName: 'Chùa Tổ Nghiệp Designer',
       altar: DEFAULT_ALTAR
@@ -45,7 +46,9 @@ function freshDb() {
     players: {},
     daily: {},
     hourly: {},
-    totals: { visits: 0, incense: 0, digs: 0, wins: 0, feeds: 0, bells: 0, roomsCreated: 1 }
+    accounts: {},
+    sessions: {},
+    totals: { visits: 0, incense: 0, digs: 0, wins: 0, feeds: 0, bells: 0, roomsCreated: 1, registers: 0 }
   };
 }
 
@@ -76,7 +79,7 @@ const dayKey = () => vnNow().slice(0, 10);
 const hourKey = () => vnNow().slice(0, 13);
 function today() {
   const k = dayKey();
-  if (!db.daily[k]) db.daily[k] = { visits: 0, u: {}, newPlayers: 0, incense: 0, digs: 0, wins: 0, feeds: 0, bells: 0, peak: 0 };
+  if (!db.daily[k]) db.daily[k] = { visits: 0, u: {}, newPlayers: 0, incense: 0, digs: 0, wins: 0, feeds: 0, bells: 0, peak: 0, registers: 0, logins: 0 };
   return db.daily[k];
 }
 function thisHour() {
@@ -246,6 +249,82 @@ function giveVoucher(v, pid, name, room) {
   return award;
 }
 
+/* ----------------------------- Tài khoản & chống spam ----------------------------- */
+const HATS = ['none', 'non', 'beanie', 'headphone'];
+const EMAIL_RE = /^[^\s@<>]{1,64}@[^\s@<>]{1,190}\.[a-z]{2,24}$/i;
+const hashPw = (pw, salt) => crypto.scryptSync(String(pw), salt, 32).toString('hex');
+const normName = n => n.toLowerCase().normalize('NFC').replace(/\s+/g, ' ').trim();
+const limits = new Map(); // key -> [timestamps]
+function hit(key, max, windowMs) {
+  const now = Date.now(), arr = (limits.get(key) || []).filter(t => now - t < windowMs);
+  arr.push(now); limits.set(key, arr);
+  return arr.length > max;
+}
+function peek(key, windowMs) { const now = Date.now(); return (limits.get(key) || []).filter(t => now - t < windowMs).length; }
+setInterval(() => { const now = Date.now(); for (const [k, a] of limits) if (!a.some(t => now - t < 86400e3)) limits.delete(k); }, 600e3);
+function newSession(acc) {
+  const token = crypto.randomBytes(32).toString('hex');
+  db.sessions[token] = { email: acc.email, exp: Date.now() + 60 * 86400e3 };
+  // giữ tối đa 5 phiên mỗi tài khoản
+  const mine = Object.entries(db.sessions).filter(([, s]) => s.email === acc.email).sort((a, b) => a[1].exp - b[1].exp);
+  mine.slice(0, Math.max(0, mine.length - 5)).forEach(([t]) => delete db.sessions[t]);
+  save();
+  return token;
+}
+function accountByToken(token) {
+  const s = token && db.sessions[token];
+  if (!s || s.exp < Date.now()) return null;
+  return db.accounts[s.email] || null;
+}
+const accountByPid = pid => Object.values(db.accounts).find(a => a.pid === pid);
+const pubAccount = a => ({ name: a.name, color: a.color, hat: a.hat });
+function kickPid(pid, msg, banned) {
+  for (const r of rooms.values()) for (const c of r.clients.values()) if (c.pid === pid) { c.ws.send({ t: 'kicked', msg, banned: !!banned }); setTimeout(() => c.ws.close(), 50); }
+}
+setInterval(() => { const now = Date.now(); let n = 0; for (const t in db.sessions) if (db.sessions[t].exp < now) { delete db.sessions[t]; n++; } if (n) save(); }, 3600e3);
+
+async function handleAuth(p, req, res, ip) {
+  if (hit('auth:' + ip, 40, 60e3)) return json(res, 429, { error: 'Bạn thao tác quá nhanh, vui lòng thử lại sau 1 phút.' });
+  const b = await readBody(req);
+  const email = String(b.email || '').trim().toLowerCase();
+  if (p === '/api/auth/register') {
+    const name = clean(b.name, 18).replace(/\s+/g, ' ');
+    if (!EMAIL_RE.test(email)) return json(res, 400, { error: 'Email chưa đúng định dạng.' });
+    if (String(b.password || '').length < 6) return json(res, 400, { error: 'Mật khẩu cần ít nhất 6 ký tự.' });
+    if (name.length < 2) return json(res, 400, { error: 'Pháp danh cần ít nhất 2 ký tự.' });
+    if (db.accounts[email]) return json(res, 409, { error: 'Email này đã có tài khoản — hãy chọn “Đã có tài khoản” để đăng nhập.' });
+    if (Object.values(db.accounts).some(a => normName(a.name) === normName(name))) return json(res, 409, { error: 'Pháp danh này đã có người dùng, hãy chọn tên khác nhé.' });
+    if (peek('reg:' + ip, 86400e3) >= db.config.maxAccountsPerIpPerDay) return json(res, 429, { error: 'Thiết bị/mạng này đã tạo quá nhiều tài khoản hôm nay. Vui lòng thử lại vào ngày mai.' });
+    hit('reg:' + ip, 1e9, 86400e3);
+    const salt = crypto.randomBytes(16).toString('hex');
+    const acc = db.accounts[email] = {
+      email, pid: crypto.randomUUID(), name, color: COLORS.includes(b.color) ? b.color : COLORS[0], hat: HATS.includes(b.hat) ? b.hat : 'none',
+      salt, hash: hashPw(b.password, salt), createdAt: Date.now(), lastLogin: Date.now(), ip, lastIp: ip, banned: false, logins: 1
+    };
+    today().registers = (today().registers || 0) + 1; db.totals.registers = (db.totals.registers || 0) + 1;
+    save();
+    return json(res, 200, { token: newSession(acc), account: pubAccount(acc) });
+  }
+  if (p === '/api/auth/login') {
+    if (peek('lockmail:' + email, 15 * 60e3) >= 5) return json(res, 429, { error: 'Đăng nhập sai nhiều lần. Tài khoản tạm khoá 15 phút.' });
+    if (peek('failip:' + ip, 15 * 60e3) >= 15) return json(res, 429, { error: 'Quá nhiều lần đăng nhập sai từ mạng này, vui lòng thử lại sau 15 phút.' });
+    const acc = db.accounts[email];
+    const ok = acc && crypto.timingSafeEqual(Buffer.from(hashPw(b.password || '', acc.salt), 'hex'), Buffer.from(acc.hash, 'hex'));
+    if (!ok) { hit('lockmail:' + email, 1e9, 15 * 60e3); hit('failip:' + ip, 1e9, 15 * 60e3); return json(res, 401, { error: 'Email hoặc mật khẩu chưa đúng.' }); }
+    if (acc.banned) return json(res, 403, { error: 'Tài khoản đã bị khoá. Liên hệ PikLab nếu có nhầm lẫn.' });
+    acc.lastLogin = Date.now(); acc.lastIp = ip; acc.logins = (acc.logins || 0) + 1;
+    today().logins = (today().logins || 0) + 1;
+    return json(res, 200, { token: newSession(acc), account: pubAccount(acc) });
+  }
+  if (p === '/api/auth/me') {
+    const acc = accountByToken(b.token);
+    if (!acc || acc.banned) return json(res, 401, { error: 'Phiên đăng nhập đã hết hạn.' });
+    return json(res, 200, { account: pubAccount(acc) });
+  }
+  if (p === '/api/auth/logout') { if (b.token) delete db.sessions[b.token]; save(); return json(res, 200, { ok: true }); }
+  return json(res, 404, { error: 'Not found' });
+}
+
 function handleClient(ws, req) {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   let me = null, room = null;
@@ -256,8 +335,11 @@ function handleClient(ws, req) {
     switch (m.t) {
       case 'hello': {
         if (me) return;
-        const pid = /^[a-zA-Z0-9-]{8,64}$/.test(m.pid || '') ? m.pid : crypto.randomUUID();
-        const name = clean(m.name, 18) || 'Designer ẩn danh';
+        const acc = accountByToken(m.token);
+        if (!acc) { ws.send({ t: 'authError', msg: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.' }); return setTimeout(() => ws.close(), 50); }
+        if (acc.banned) { ws.send({ t: 'authError', msg: 'Tài khoản đã bị khoá. Liên hệ PikLab nếu có nhầm lẫn.' }); return setTimeout(() => ws.close(), 50); }
+        const pid = acc.pid, name = acc.name;
+        kickPid(pid, 'Tài khoản của bạn vừa vào chùa ở một cửa sổ/thiết bị khác.');
         const p = getPlayer(pid, name);
         p.lastSeen = Date.now(); p.visits++;
         const d = today();
@@ -266,8 +348,7 @@ function handleClient(ws, req) {
         room = pickRoom();
         me = {
           ws, pid, ip, name, id: crypto.randomBytes(4).toString('hex'),
-          color: COLORS.includes(m.color) ? m.color : COLORS[0],
-          hat: ['none', 'non', 'beanie', 'headphone'].includes(m.hat) ? m.hat : 'none',
+          color: acc.color, hat: acc.hat,
           x: LAYOUT.spawn.x + (Math.random() * 80 - 40), y: LAYOUT.spawn.y + (Math.random() * 30 - 15),
           dir: 1, moving: false, lastIncense: 0, lastBell: 0, lastEmote: 0
         };
@@ -403,7 +484,7 @@ function isAdmin(req) {
 function readBody(req) {
   return new Promise(resolve => {
     let data = '';
-    req.on('data', c => { data += c; if (data.length > 2e6) req.destroy(); });
+    req.on('data', c => { data += c; if (data.length > 6e6) req.destroy(); });
     req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch (e) { resolve({}); } });
   });
 }
@@ -420,7 +501,7 @@ function statsPayload() {
   for (let i = 13; i >= 0; i--) {
     const k = new Date(Date.now() + 7 * 3600e3 - i * 86400e3).toISOString().slice(0, 10);
     const d = db.daily[k] || { visits: 0, u: {}, newPlayers: 0, incense: 0, digs: 0, wins: 0, feeds: 0, bells: 0, peak: 0 };
-    days.push({ day: k, visits: d.visits, uniques: Object.keys(d.u).length, newPlayers: d.newPlayers, incense: d.incense, digs: d.digs, wins: d.wins, feeds: d.feeds, bells: d.bells, peak: d.peak });
+    days.push({ day: k, registers: d.registers || 0, logins: d.logins || 0, visits: d.visits, uniques: Object.keys(d.u).length, newPlayers: d.newPlayers, incense: d.incense, digs: d.digs, wins: d.wins, feeds: d.feeds, bells: d.bells, peak: d.peak });
   }
   const hours = [];
   for (let i = 23; i >= 0; i--) {
@@ -432,7 +513,7 @@ function statsPayload() {
   return {
     online: totalOnline(), rooms: roomList(), capacity: db.config.roomCapacity,
     today: days[days.length - 1], days, hours, totals: db.totals,
-    players: Object.keys(db.players).length, totalRate,
+    players: Object.keys(db.players).length, accounts: Object.keys(db.accounts).length, totalRate,
     lastWins: db.awards.slice(-8).reverse().map(a => ({ name: a.name, title: a.title, code: a.code, time: a.time, room: a.room }))
   };
 }
@@ -442,6 +523,7 @@ const server = http.createServer(async (req, res) => {
   const p = url.pathname;
 
   if (p.startsWith('/api/')) {
+    if (p.startsWith('/api/auth/') && req.method === 'POST') return handleAuth(p, req, res, (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim());
     if (p === '/api/public/info') {
       return json(res, 200, { online: totalOnline(), rooms: roomList(), templeName: db.config.templeName, recent: db.awards.slice(-6).reverse().map(a => ({ name: a.name.slice(0, 2) + '***', title: a.title })) });
     }
@@ -460,12 +542,13 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const c = db.config;
       if (b.roomCapacity) c.roomCapacity = Math.max(1, Math.min(500, b.roomCapacity | 0));
+      if (b.maxAccountsPerIpPerDay) c.maxAccountsPerIpPerDay = Math.max(1, Math.min(1000, b.maxAccountsPerIpPerDay | 0));
       if (b.digsPerDay !== undefined) c.digsPerDay = Math.max(0, Math.min(100, b.digsPerDay | 0));
       if (b.plotRegrowSec) c.plotRegrowSec = Math.max(5, Math.min(86400, b.plotRegrowSec | 0));
       if (b.incenseCooldownSec !== undefined) c.incenseCooldownSec = Math.max(0, Math.min(3600, b.incenseCooldownSec | 0));
       if (b.shopUrl) c.shopUrl = clean(b.shopUrl, 300);
       if (b.templeName) c.templeName = clean(b.templeName, 60);
-      if (Array.isArray(b.altar)) c.altar = b.altar.slice(0, 14).map((a, i) => ({ id: clean(a.id, 12) || 'app' + i, name: clean(a.name, 24), short: clean(a.short, 3), color: /^#[0-9a-fA-F]{3,8}$/.test(a.color) ? a.color : '#cccccc', image: clean(a.image, 500) }));
+      if (Array.isArray(b.altar)) c.altar = b.altar.slice(0, 14).map((a, i) => ({ id: clean(a.id, 12) || 'app' + i, name: clean(a.name, 24), short: clean(a.short, 3), color: /^#[0-9a-fA-F]{3,8}$/.test(a.color) ? a.color : '#cccccc', image: /^data:image\/(png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(a.image || '') && a.image.length < 400000 ? a.image : clean(a.image, 500) }));
       save();
       return json(res, 200, c);
     }
@@ -500,13 +583,44 @@ const server = http.createServer(async (req, res) => {
       save();
       return json(res, 200, voucherOut(v));
     }
+    if (p === '/api/admin/accounts') {
+      const q = (url.searchParams.get('q') || '').toLowerCase();
+      const online = new Set(); for (const r of rooms.values()) for (const c of r.clients.values()) online.add(c.pid);
+      const list = Object.values(db.accounts).filter(a => !q || a.email.includes(q) || a.name.toLowerCase().includes(q)).sort((a, b) => b.lastLogin - a.lastLogin).map(a => {
+        const pl = db.players[a.pid] || {};
+        return { email: a.email, name: a.name, pid: a.pid, createdAt: a.createdAt, lastLogin: a.lastLogin, ip: a.ip, lastIp: a.lastIp, banned: !!a.banned, logins: a.logins || 0, phuoc: pl.phuoc || 0, digs: pl.digs || 0, wins: (pl.wins || []).length, online: online.has(a.pid) };
+      });
+      if (url.searchParams.get('format') === 'csv') {
+        res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="nguoi-choi.csv"' });
+        const f = t => new Date(t + 7 * 3600e3).toISOString().replace('T', ' ').slice(0, 19);
+        const rows = [['Email', 'Pháp danh', 'Ngày tạo', 'Đăng nhập gần nhất', 'Số lần đăng nhập', 'Điểm phước', 'Lượt đào', 'Voucher đã trúng', 'IP tạo', 'Bị khoá']].concat(list.map(a => [a.email, a.name, f(a.createdAt), f(a.lastLogin), a.logins, a.phuoc, a.digs, a.wins, a.ip, a.banned ? 'Có' : '']));
+        return res.end('\ufeff' + rows.map(r => r.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\n'));
+      }
+      return json(res, 200, list.slice(0, 1000));
+    }
+    if ((mm = p.match(/^\/api\/admin\/accounts\/([\w-]+)$/)) && req.method === 'POST') {
+      const acc = accountByPid(mm[1]); if (!acc) return json(res, 404, { error: 'Không tìm thấy' });
+      const b = await readBody(req);
+      if (b.password !== undefined) {
+        if (String(b.password).length < 6) return json(res, 400, { error: 'Mật khẩu cần ít nhất 6 ký tự.' });
+        acc.salt = crypto.randomBytes(16).toString('hex'); acc.hash = hashPw(b.password, acc.salt);
+        for (const t in db.sessions) if (db.sessions[t].email === acc.email) delete db.sessions[t];
+        limits.delete('lockmail:' + acc.email);
+        kickPid(acc.pid, 'Mật khẩu tài khoản vừa được đổi, vui lòng đăng nhập lại.');
+        save(); return json(res, 200, { ok: true });
+      }
+      acc.banned = !!b.banned;
+      if (acc.banned) { kickPid(acc.pid, 'Tài khoản của bạn đã bị quản trị viên khoá. Liên hệ PikLab nếu có nhầm lẫn.', true); for (const t in db.sessions) if (db.sessions[t].email === acc.email) delete db.sessions[t]; }
+      save();
+      return json(res, 200, { ok: true, banned: acc.banned });
+    }
     if (p === '/api/admin/awards') {
       if (url.searchParams.get('format') === 'csv') {
         res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="nguoi-trung-thuong.csv"' });
-        const rows = [['Thời gian', 'Tên người chơi', 'Mã người chơi', 'Voucher', 'Mã', 'Chùa']].concat(db.awards.map(a => [new Date(a.time + 7 * 3600e3).toISOString().replace('T', ' ').slice(0, 19), a.name, a.pid, a.title, a.code, a.room]));
+        const rows = [['Thời gian', 'Pháp danh', 'Email', 'Voucher', 'Mã', 'Chùa']].concat(db.awards.map(a => [new Date(a.time + 7 * 3600e3).toISOString().replace('T', ' ').slice(0, 19), a.name, (accountByPid(a.pid) || {}).email || '', a.title, a.code, a.room]));
         return res.end('﻿' + rows.map(r => r.map(x => '"' + String(x).replace(/"/g, '""') + '"').join(',')).join('\n'));
       }
-      return json(res, 200, db.awards.slice(-500).reverse());
+      return json(res, 200, db.awards.slice(-500).reverse().map(a => Object.assign({}, a, { email: (accountByPid(a.pid) || {}).email || '' })));
     }
     return json(res, 404, { error: 'Not found' });
   }
