@@ -245,7 +245,7 @@ function drawHall(t) {
   ctx.fillStyle = '#7a2c18'; ctx.fillRect(760, 250, 480, 14);
   ctx.strokeStyle = '#e8b65a'; ctx.lineWidth = 2; ctx.strokeRect(770, 268, 460, 40);
   ctx.fillStyle = '#e8b65a'; ctx.font = '600 10px "Be Vietnam Pro", sans-serif';
-  ctx.fillText('✦  HỆ SINH THÁI PIKLAB  ✦', 1000, 288);
+  ctx.fillText('✦  NAM MÔ A DI ĐÀ DUYỆT  ✦', 1000, 288);
   // nến
   [778, 1222].forEach(x => {
     ctx.fillStyle = '#f2e6c9'; ctx.fillRect(x - 5, 226, 10, 26);
@@ -367,7 +367,7 @@ function drawGate(t) {
   ctx.fillStyle = '#6e2516'; ctx.beginPath(); ctx.moveTo(x - 110, y - 128); ctx.lineTo(x - 80, y - 160); ctx.lineTo(x + 80, y - 160); ctx.lineTo(x + 110, y - 128); ctx.closePath(); ctx.fill();
   ctx.strokeStyle = '#e8b65a'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x - 220, y - 92); ctx.quadraticCurveTo(x - 190, y - 102, x - 150, y - 104); ctx.lineTo(x + 150, y - 104); ctx.quadraticCurveTo(x + 190, y - 102, x + 220, y - 92); ctx.stroke();
   ctx.fillStyle = '#8c2b1e'; roundRect(ctx, x - 70, y - 124, 140, 22, 4); ctx.fill(); ctx.strokeStyle = '#e8b65a'; ctx.lineWidth = 1.5; ctx.strokeRect(x - 66, y - 121, 132, 16);
-  ctx.fillStyle = '#f7d58c'; ctx.font = '700 12px "Noto Serif", serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('TAM QUAN DESIGNER', x, y - 113);
+  ctx.fillStyle = '#f7d58c'; ctx.font = '700 12px "Noto Serif", serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('VẠN SỰ UNDO', x, y - 113);
   lights.push([x - 120, y - 70, 80, .4], [x + 120, y - 70, 80, .4]);
 }
 function drawPillars() {
