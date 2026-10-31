@@ -158,6 +158,18 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
         <label>Giãn cách thắp hương (giây) <input name="incenseCooldownSec" type="number" min="0"></label>
         <label>Link hệ sinh thái PikLab <input name="shopUrl"></label>
       </div>
+      <h2>Phước &amp; khu chợ</h2>
+      <div class="form" id="eForm">
+        <label>Phước tặng khi tạo tài khoản <input name="startPhuoc" type="number" min="0"></label>
+        <label>Phước cho mỗi lần gieo quẻ <input name="fortuneCost" type="number" min="0"></label>
+        <label>Phước cho mỗi câu khẩu nghiệp <input name="shoutCost" type="number" min="0"></label>
+        <label>Phước nhận được khi quét 1 ụ lá đa <input name="sweepReward" type="number" min="0"></label>
+        <label>Lá đa rụng lại sau (giây) <input name="leafRegrowSec" type="number" min="5"></label>
+        <label class="full">Nội dung quẻ — mỗi dòng là một quẻ (<span id="fCount">0</span> quẻ)
+          <textarea name="fortunes" style="min-height:220px;font-family:inherit;font-size:13.5px"></textarea></label>
+        <label class="full">Từ cấm ở Bãi Khẩu Nghiệp — tự che thành *** (mỗi dòng hoặc cách nhau dấu phẩy)
+          <textarea name="bannedWords" style="min-height:70px"></textarea></label>
+      </div>
       <h2>Bài vị trên ban thờ</h2>
       <p class="muted">Bấm “⬆ Tải icon” để đặt ảnh icon của từng ứng dụng lên bài vị (PNG/SVG/JPG, tự thu nhỏ còn 192px). Chưa có icon thì bài vị hiện tên viết tắt.</p>
       <div class="altar-row muted" style="font-size:12px;font-weight:600"><span>Mã</span><span>Tên ứng dụng</span><span>Viết tắt</span><span>Màu</span><span>Icon</span><span></span></div>
@@ -232,7 +244,10 @@ async function loadStats() {
     ['🪔 Nén hương hôm nay', d.incense, `Tổng: ${fmt(s.totals.incense)}`],
     ['⛏️ Lượt đào hôm nay', d.digs, `Tổng: ${fmt(s.totals.digs)}`],
     ['🎟️ Voucher đã phát hôm nay', d.wins, `Tổng: ${fmt(s.totals.wins)}`],
-    ['🥬 Lượt cho thú ăn', d.feeds, `🔔 Thỉnh chuông: ${d.bells}`]
+    ['🥬 Lượt cho thú ăn', d.feeds, `🔔 Thỉnh chuông: ${d.bells}`],
+    ['🎋 Gieo quẻ hôm nay', d.fortunes, `📢 Khẩu nghiệp: ${d.shouts} câu`],
+    ['🪢 Trận kéo co hôm nay', d.tugs, `🧹 Quét lá: ${d.sweeps} ụ`],
+    ['🍜 Món ăn đã bán hôm nay', d.meals, `👒 Mua đồ / cắt tóc: ${d.purchases}`]
   ].map(([l, v, sub, cls]) => `<div class="kpi ${cls || ''}"><div class="l">${l}</div><div class="v">${fmt(v)}</div><div class="s">${sub}</div></div>`).join('');
   $('#roomsTbl').innerHTML = '<tr><th>Khuôn viên</th><th class="num">Đang online</th><th style="width:45%">Mức lấp đầy</th><th>Trạng thái</th></tr>' + s.rooms.map(r => {
     const pct = Math.min(100, r.online / r.capacity * 100);
@@ -341,7 +356,11 @@ async function loadCfg() {
   cfg = await api('/api/admin/config');
   const f = $('#cForm'); ['templeName', 'roomCapacity', 'digsPerDay', 'maxAccountsPerIpPerDay', 'plotRegrowSec', 'incenseCooldownSec', 'shopUrl'].forEach(k => f.querySelector(`[name=${k}]`).value = cfg[k]);
   $('#altarRows').innerHTML = cfg.altar.map(altarRow).join('');
+  const e = $('#eForm'); ['startPhuoc', 'fortuneCost', 'shoutCost', 'sweepReward', 'leafRegrowSec'].forEach(k => e.querySelector(`[name=${k}]`).value = cfg[k] ?? '');
+  e.querySelector('[name=fortunes]').value = (cfg.fortunes || []).join('\n'); e.querySelector('[name=bannedWords]').value = (cfg.bannedWords || []).join(', ');
+  $('#fCount').textContent = (cfg.fortunes || []).length;
 }
+$('#eForm').addEventListener('input', e => { if (e.target.name === 'fortunes') $('#fCount').textContent = e.target.value.split('\n').filter(x => x.trim()).length; });
 $('#altarRows').addEventListener('click', e => {
   if (e.target.hasAttribute('data-rm')) e.target.closest('.altar-row').remove();
   if (e.target.hasAttribute('data-clr')) { const row = e.target.closest('.altar-row'); row.outerHTML = altarRow(Object.assign(rowData(row), { image: '' })); }
@@ -358,6 +377,8 @@ $('#saveCfg').onclick = async () => {
   const f = $('#cForm'), body = {};
   ['templeName', 'shopUrl'].forEach(k => body[k] = f.querySelector(`[name=${k}]`).value);
   ['roomCapacity', 'digsPerDay', 'maxAccountsPerIpPerDay', 'plotRegrowSec', 'incenseCooldownSec'].forEach(k => body[k] = +f.querySelector(`[name=${k}]`).value);
+  const ef = $('#eForm'); ['startPhuoc', 'fortuneCost', 'shoutCost', 'sweepReward', 'leafRegrowSec'].forEach(k => body[k] = ef.querySelector(`[name=${k}]`).value === '' ? '' : +ef.querySelector(`[name=${k}]`).value);
+  body.fortunes = ef.querySelector('[name=fortunes]').value; body.bannedWords = ef.querySelector('[name=bannedWords]').value;
   body.altar = [...document.querySelectorAll('#altarRows .altar-row')].map(r => { const o = {}; r.querySelectorAll('[data-k]').forEach(i => o[i.dataset.k] = i.value); return o; });
   await api('/api/admin/config', { method: 'POST', body });
   $('#cfgMsg').textContent = '✓ Đã lưu. Người chơi vào chùa sau sẽ thấy thay đổi.'; setTimeout(() => $('#cfgMsg').textContent = '', 4000);
