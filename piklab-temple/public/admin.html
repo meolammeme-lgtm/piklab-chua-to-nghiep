@@ -70,11 +70,8 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
 <div id="loginView" class="login">
   <h1>🛕 Quản trị chùa</h1>
   <p class="muted">Chùa Tổ Nghiệp Designer · PikLab</p>
-  <label for="pw" class="muted" style="display:block;margin-top:14px">Mật khẩu quản trị</label>
-  <input id="pw" type="password" placeholder="Nhập mật khẩu" autocomplete="current-password" autocapitalize="off" spellcheck="false" style="margin:8px 0;width:100%;position:relative;z-index:5;pointer-events:auto;user-select:text;-webkit-user-select:text">
-  <label style="display:flex;align-items:center;gap:8px;margin:3px 0 12px;font-size:12px"><input id="showPw" type="checkbox" style="width:auto;margin:0"> Hiện mật khẩu để kiểm tra</label>
-  <button class="btn ghost" type="button" id="fallbackPw" style="width:100%;margin-bottom:10px">Không gõ được? Nhập bằng hộp thoại</button>
-  <button class="btn" id="loginBtn" type="button" style="width:100%">Đăng nhập</button>
+  <input id="pw" type="password" placeholder="Mật khẩu quản trị">
+  <button class="btn" id="loginBtn" style="width:100%">Đăng nhập</button>
   <p id="loginErr" style="color:#b2412b"></p>
 </div>
 
@@ -83,6 +80,7 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
   <nav>
     <button data-tab="overview" class="on">📊 Tổng quan truy cập</button>
     <button data-tab="vouchers">🎟️ Voucher &amp; tỉ lệ</button>
+    <button data-tab="accounts">👤 Người chơi</button>
     <button data-tab="awards">🏆 Người trúng thưởng</button>
     <button data-tab="settings">⚙️ Cài đặt</button>
   </nav>
@@ -128,6 +126,16 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
       </div>
     </section>
 
+    <!-- Người chơi -->
+    <section id="tab-accounts" class="hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <h2 style="margin:0">Tài khoản người chơi <span class="muted" id="accCount" style="font-weight:400"></span></h2>
+        <div style="display:flex;gap:8px"><input id="accQ" placeholder="Tìm email hoặc pháp danh…" style="min-width:240px"><button class="btn ghost" id="accCsv">⬇ Xuất CSV</button></div>
+      </div>
+      <p class="muted" style="margin:8px 0 0">Email chỉ hiển thị ở trang quản trị, người chơi với nhau chỉ thấy pháp danh. Khoá tài khoản sẽ đẩy người đó ra khỏi chùa ngay lập tức.</p>
+      <div style="overflow-x:auto;margin-top:12px"><table id="accTbl"></table></div>
+    </section>
+
     <!-- Người trúng -->
     <section id="tab-awards" class="hidden">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
@@ -144,13 +152,14 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
         <label>Tên chùa <input name="templeName"></label>
         <label>Sức chứa mỗi khuôn viên (người) <input name="roomCapacity" type="number" min="1"></label>
         <label>Lượt đào mỗi ngày / người <input name="digsPerDay" type="number" min="0"></label>
+        <label>Số tài khoản mới tối đa / mạng (IP) / ngày <input name="maxAccountsPerIpPerDay" type="number" min="1"></label>
         <label>Thời gian rau mọc lại (giây) <input name="plotRegrowSec" type="number" min="5"></label>
         <label>Giãn cách thắp hương (giây) <input name="incenseCooldownSec" type="number" min="0"></label>
         <label>Link hệ sinh thái PikLab <input name="shopUrl"></label>
       </div>
       <h2>Bài vị trên ban thờ</h2>
-      <p class="muted">Mặc định bài vị ghi tên viết tắt. Bạn có thể dán link ảnh icon (PNG/SVG) của từng ứng dụng vào cột “Ảnh icon” để hiển thị trên ban thờ.</p>
-      <div class="altar-row muted" style="font-size:12px;font-weight:600"><span>Mã</span><span>Tên ứng dụng</span><span>Viết tắt</span><span>Màu</span><span>Ảnh icon (URL)</span><span></span></div>
+      <p class="muted">Bấm “⬆ Tải icon” để đặt ảnh icon của từng ứng dụng lên bài vị (PNG/SVG/JPG, tự thu nhỏ còn 192px). Chưa có icon thì bài vị hiện tên viết tắt.</p>
+      <div class="altar-row muted" style="font-size:12px;font-weight:600"><span>Mã</span><span>Tên ứng dụng</span><span>Viết tắt</span><span>Màu</span><span>Icon</span><span></span></div>
       <div id="altarRows"></div>
       <button class="btn gray sm" id="addAltar">+ Thêm bài vị</button>
       <div style="margin-top:20px"><button class="btn" id="saveCfg">Lưu cài đặt</button> <span id="cfgMsg" class="muted"></span></div>
@@ -172,29 +181,13 @@ async function api(path, opt = {}) {
 }
 function logout() { token = ''; sessionStorage.removeItem('pk_admin'); $('#app').classList.add('hidden'); $('#loginView').classList.remove('hidden'); }
 $('#logout').onclick = e => { e.preventDefault(); logout(); };
-const pwInput = $('#pw');
-$('#showPw').addEventListener('change', e => { pwInput.type = e.target.checked ? 'text' : 'password'; pwInput.focus(); });
-$('#fallbackPw').addEventListener('click', () => {
-  const value = window.prompt('Nhập mật khẩu quản trị (nội dung sẽ hiển thị rõ trong hộp thoại):');
-  if (value === null) return;
-  pwInput.value = value;
-  $('#loginErr').textContent = 'Đã nhận ' + value.length + ' ký tự. Nhấn Đăng nhập.';
-});
 async function login() {
-  $('#loginErr').textContent = '';
-  const password = pwInput.value;
-  if (!password) { $('#loginErr').textContent = 'Chưa nhập mật khẩu.'; pwInput.focus(); return; }
-  const button = $('#loginBtn'); button.disabled = true;
-  try {
-    const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
-    const j = await r.json();
-    if (!r.ok || !j.token) { $('#loginErr').textContent = j.error || 'Đăng nhập thất bại (' + r.status + ')'; return; }
-    token = j.token; sessionStorage.setItem('pk_admin', token); pwInput.value = ''; start();
-  } catch (err) { $('#loginErr').textContent = 'Không kết nối được server. Thử lại sau.'; }
-  finally { button.disabled = false; }
+  const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: $('#pw').value }) });
+  const j = await r.json();
+  if (!j.token) return $('#loginErr').textContent = j.error || 'Lỗi';
+  token = j.token; sessionStorage.setItem('pk_admin', token); start();
 }
-$('#loginBtn').addEventListener('click', login);
-pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); login(); } });
+$('#loginBtn').onclick = login; $('#pw').onkeydown = e => e.key === 'Enter' && login();
 
 let tab = 'overview';
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
@@ -204,7 +197,7 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
 });
 
 function start() { $('#loginView').classList.add('hidden'); $('#app').classList.remove('hidden'); refresh(); }
-function refresh() { ({ overview: loadStats, vouchers: loadVouchers, awards: loadAwards, settings: loadCfg })[tab](); }
+function refresh() { ({ overview: loadStats, vouchers: loadVouchers, accounts: loadAccounts, awards: loadAwards, settings: loadCfg })[tab](); }
 setInterval(() => { if (token && tab === 'overview') loadStats(); }, 5000);
 
 /* ---------- Tổng quan ---------- */
@@ -230,7 +223,7 @@ async function loadStats() {
     ['🟢 Đang online', s.online, `${s.rooms.length} khuôn viên đang mở`, 'live'],
     ['Lượt truy cập hôm nay', d.visits, `Đỉnh online: ${d.peak} người`],
     ['Người dùng duy nhất hôm nay', d.uniques, `${d.newPlayers} người mới`],
-    ['Tổng người chơi', s.players, `${fmt(s.totals.visits)} lượt vào tổng cộng`],
+    ['Tài khoản đã đăng ký', s.accounts, `+${d.registers} hôm nay · ${d.logins} lượt đăng nhập`],
     ['🪔 Nén hương hôm nay', d.incense, `Tổng: ${fmt(s.totals.incense)}`],
     ['⛏️ Lượt đào hôm nay', d.digs, `Tổng: ${fmt(s.totals.digs)}`],
     ['🎟️ Voucher đã phát hôm nay', d.wins, `Tổng: ${fmt(s.totals.wins)}`],
@@ -242,8 +235,8 @@ async function loadStats() {
   }).join('');
   barChart($('#chartHours'), s.hours.map(h => h.hour), [s.hours.map(h => h.peak), s.hours.map(h => h.visits)], ['#2f855a', '#e8c890'], ['Online cao nhất', 'Lượt vào']);
   barChart($('#chartDays'), s.days.map(x => x.day.slice(8) + '/' + x.day.slice(5, 7)), [s.days.map(x => x.visits), s.days.map(x => x.uniques)], ['#c8902e', '#8c2b1e'], ['Lượt truy cập', 'Người duy nhất']);
-  $('#daysTbl').innerHTML = '<tr><th>Ngày</th><th class="num">Lượt vào</th><th class="num">Duy nhất</th><th class="num">Đỉnh online</th><th class="num">Hương</th><th class="num">Đào</th><th class="num">Trúng</th><th class="num">Cho ăn</th></tr>' +
-    s.days.slice().reverse().map(x => `<tr><td>${x.day.slice(8)}/${x.day.slice(5, 7)}</td><td class="num">${x.visits}</td><td class="num">${x.uniques}</td><td class="num">${x.peak}</td><td class="num">${x.incense}</td><td class="num">${x.digs}</td><td class="num">${x.wins}</td><td class="num">${x.feeds}</td></tr>`).join('');
+  $('#daysTbl').innerHTML = '<tr><th>Ngày</th><th class="num">Đăng ký</th><th class="num">Lượt vào</th><th class="num">Duy nhất</th><th class="num">Đỉnh online</th><th class="num">Hương</th><th class="num">Đào</th><th class="num">Trúng</th><th class="num">Cho ăn</th></tr>' +
+    s.days.slice().reverse().map(x => `<tr><td>${x.day.slice(8)}/${x.day.slice(5, 7)}</td><td class="num">${x.registers}</td><td class="num">${x.visits}</td><td class="num">${x.uniques}</td><td class="num">${x.peak}</td><td class="num">${x.incense}</td><td class="num">${x.digs}</td><td class="num">${x.wins}</td><td class="num">${x.feeds}</td></tr>`).join('');
   $('#lastWins').innerHTML = s.lastWins.length ? s.lastWins.map(w => `<li>🎉 <b>${esc(w.name)}</b> trúng <b>${esc(w.title)}</b> — <code>${esc(w.code)}</code> <span class="muted">· ${esc(w.room)} · ${new Date(w.time).toLocaleString('vi-VN')}</span></li>`).join('') : '<li class="muted">Chưa có ai trúng thưởng.</li>';
 }
 
@@ -296,10 +289,38 @@ $('#vCreate').onclick = async () => {
   loadVouchers();
 };
 
+/* ---------- Người chơi ---------- */
+const fdt = t => t ? new Date(t).toLocaleString('vi-VN') : '';
+async function loadAccounts() {
+  const list = await api('/api/admin/accounts?q=' + encodeURIComponent($('#accQ').value.trim()));
+  $('#accCount').textContent = `· ${list.length} tài khoản`;
+  $('#accTbl').innerHTML = '<tr><th>Pháp danh</th><th>Email</th><th>Ngày tạo</th><th>Đăng nhập gần nhất</th><th class="num">Lần đăng nhập</th><th class="num">Phước</th><th class="num">Lượt đào</th><th class="num">Trúng</th><th>IP</th><th></th></tr>' + (list.length ? list.map(a => `
+    <tr data-pid="${esc(a.pid)}"><td><b>${esc(a.name)}</b> ${a.online ? '<span class="pill on">online</span>' : ''} ${a.banned ? '<span class="pill off">bị khoá</span>' : ''}</td><td>${esc(a.email)}</td><td>${fdt(a.createdAt)}</td><td>${fdt(a.lastLogin)}</td>
+    <td class="num">${a.logins}</td><td class="num">${a.phuoc}</td><td class="num">${a.digs}</td><td class="num">${a.wins}</td><td class="muted" style="font-size:12px">${esc(a.lastIp || a.ip)}</td>
+    <td style="white-space:nowrap"><button class="btn sm gray" data-pw="1">Đặt MK mới</button> <button class="btn sm ${a.banned ? 'gray' : 'ghost'}" data-ban="${a.banned ? 0 : 1}">${a.banned ? 'Mở khoá' : 'Khoá'}</button></td></tr>`).join('') : '<tr><td colspan="10" class="muted">Chưa có tài khoản nào.</td></tr>');
+}
+let accTimer; $('#accQ').oninput = () => { clearTimeout(accTimer); accTimer = setTimeout(loadAccounts, 300); };
+$('#accTbl').addEventListener('click', async e => {
+  if (e.target.dataset.pw) {
+    const pid = e.target.closest('tr').dataset.pid, pw = prompt('Mật khẩu mới cho tài khoản này (ít nhất 6 ký tự). Hãy gửi cho khách qua email/tin nhắn riêng:');
+    if (!pw) return; if (pw.length < 6) return alert('Mật khẩu cần ít nhất 6 ký tự.');
+    const r = await api('/api/admin/accounts/' + pid, { method: 'POST', body: { password: pw } });
+    return alert(r.ok ? 'Đã đặt mật khẩu mới. Các phiên đăng nhập cũ của tài khoản đã bị đăng xuất.' : (r.error || 'Lỗi'));
+  }
+  const b = e.target.dataset.ban; if (b === undefined) return;
+  const pid = e.target.closest('tr').dataset.pid;
+  if (b === '1' && !confirm('Khoá tài khoản này? Người chơi sẽ bị đẩy ra và không đăng nhập được nữa.')) return;
+  await api('/api/admin/accounts/' + pid, { method: 'POST', body: { banned: b === '1' } }); loadAccounts();
+});
+$('#accCsv').onclick = async () => {
+  const r = await fetch('/api/admin/accounts?format=csv', { headers: { Authorization: 'Bearer ' + token } });
+  const u = URL.createObjectURL(await r.blob()); const l = document.createElement('a'); l.href = u; l.download = 'nguoi-choi.csv'; l.click(); URL.revokeObjectURL(u);
+};
+
 /* ---------- Người trúng ---------- */
 async function loadAwards() {
   const a = await api('/api/admin/awards');
-  $('#aTbl').innerHTML = '<tr><th>Thời gian</th><th>Người chơi</th><th>Voucher</th><th>Mã</th><th>Khuôn viên</th></tr>' + (a.length ? a.map(w => `<tr><td>${new Date(w.time).toLocaleString('vi-VN')}</td><td><b>${esc(w.name)}</b><div class="muted" style="font-size:11px">${esc(w.pid.slice(0, 8))}…</div></td><td>${esc(w.title)}</td><td><code>${esc(w.code)}</code></td><td>${esc(w.room)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">Chưa có ai trúng thưởng.</td></tr>');
+  $('#aTbl').innerHTML = '<tr><th>Thời gian</th><th>Người chơi</th><th>Voucher</th><th>Mã</th><th>Khuôn viên</th></tr>' + (a.length ? a.map(w => `<tr><td>${new Date(w.time).toLocaleString('vi-VN')}</td><td><b>${esc(w.name)}</b><div class="muted" style="font-size:12px">${esc(w.email || '')}</div></td><td>${esc(w.title)}</td><td><code>${esc(w.code)}</code></td><td>${esc(w.room)}</td></tr>`).join('') : '<tr><td colspan="5" class="muted">Chưa có ai trúng thưởng.</td></tr>');
 }
 $('#csvBtn').onclick = async () => {
   const r = await fetch('/api/admin/awards?format=csv', { headers: { Authorization: 'Bearer ' + token } });
@@ -309,19 +330,29 @@ $('#csvBtn').onclick = async () => {
 /* ---------- Cài đặt ---------- */
 let cfg = null;
 function altarRow(a) {
-  return `<div class="altar-row"><input value="${esc(a.id)}" data-k="id"><input value="${esc(a.name)}" data-k="name"><input value="${esc(a.short)}" data-k="short" maxlength="3"><input type="color" value="${esc(a.color)}" data-k="color"><input value="${esc(a.image)}" data-k="image" placeholder="https://.../icon.png"><button class="btn sm ghost" data-rm>✕</button></div>`;
+  return `<div class="altar-row"><input value="${esc(a.id)}" data-k="id"><input value="${esc(a.name)}" data-k="name"><input value="${esc(a.short)}" data-k="short" maxlength="3"><input type="color" value="${esc(a.color)}" data-k="color"><div style="display:flex;gap:6px;align-items:center">${a.image ? `<img src="${esc(a.image)}" style="width:34px;height:34px;object-fit:contain;border-radius:8px;background:#fff;border:1px solid #ecdfc8">` : ''}<input type="hidden" value="${esc(a.image)}" data-k="image"><label class="btn sm gray" style="white-space:nowrap">⬆ Tải icon<input type="file" accept="image/*" data-up hidden></label>${a.image ? '<button class="btn sm ghost" data-clr>Bỏ</button>' : ''}</div><button class="btn sm ghost" data-rm>✕</button></div>`;
 }
 async function loadCfg() {
   cfg = await api('/api/admin/config');
-  const f = $('#cForm'); ['templeName', 'roomCapacity', 'digsPerDay', 'plotRegrowSec', 'incenseCooldownSec', 'shopUrl'].forEach(k => f.querySelector(`[name=${k}]`).value = cfg[k]);
+  const f = $('#cForm'); ['templeName', 'roomCapacity', 'digsPerDay', 'maxAccountsPerIpPerDay', 'plotRegrowSec', 'incenseCooldownSec', 'shopUrl'].forEach(k => f.querySelector(`[name=${k}]`).value = cfg[k]);
   $('#altarRows').innerHTML = cfg.altar.map(altarRow).join('');
 }
-$('#altarRows').addEventListener('click', e => { if (e.target.hasAttribute('data-rm')) e.target.closest('.altar-row').remove(); });
+$('#altarRows').addEventListener('click', e => {
+  if (e.target.hasAttribute('data-rm')) e.target.closest('.altar-row').remove();
+  if (e.target.hasAttribute('data-clr')) { const row = e.target.closest('.altar-row'); row.outerHTML = altarRow(Object.assign(rowData(row), { image: '' })); }
+});
+function rowData(r) { const o = {}; r.querySelectorAll('[data-k]').forEach(i => o[i.dataset.k] = i.value); return o; }
+$('#altarRows').addEventListener('change', e => {
+  if (!e.target.hasAttribute('data-up') || !e.target.files[0]) return;
+  const row = e.target.closest('.altar-row'), fr = new FileReader();
+  fr.onload = () => { const im = new Image(); im.onload = () => { const s = Math.min(1, 192 / Math.max(im.width, im.height)), c = document.createElement('canvas'); c.width = Math.round(im.width * s); c.height = Math.round(im.height * s); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); row.outerHTML = altarRow(Object.assign(rowData(row), { image: c.toDataURL('image/png') })); $('#cfgMsg').textContent = 'Nhớ bấm “Lưu cài đặt”.'; }; im.src = fr.result; };
+  fr.readAsDataURL(e.target.files[0]);
+});
 $('#addAltar').onclick = () => $('#altarRows').insertAdjacentHTML('beforeend', altarRow({ id: 'app' + Date.now() % 1000, name: 'Ứng dụng mới', short: 'Ap', color: '#cccccc', image: '' }));
 $('#saveCfg').onclick = async () => {
   const f = $('#cForm'), body = {};
   ['templeName', 'shopUrl'].forEach(k => body[k] = f.querySelector(`[name=${k}]`).value);
-  ['roomCapacity', 'digsPerDay', 'plotRegrowSec', 'incenseCooldownSec'].forEach(k => body[k] = +f.querySelector(`[name=${k}]`).value);
+  ['roomCapacity', 'digsPerDay', 'maxAccountsPerIpPerDay', 'plotRegrowSec', 'incenseCooldownSec'].forEach(k => body[k] = +f.querySelector(`[name=${k}]`).value);
   body.altar = [...document.querySelectorAll('#altarRows .altar-row')].map(r => { const o = {}; r.querySelectorAll('[data-k]').forEach(i => o[i.dataset.k] = i.value); return o; });
   await api('/api/admin/config', { method: 'POST', body });
   $('#cfgMsg').textContent = '✓ Đã lưu. Người chơi vào chùa sau sẽ thấy thay đổi.'; setTimeout(() => $('#cfgMsg').textContent = '', 4000);
