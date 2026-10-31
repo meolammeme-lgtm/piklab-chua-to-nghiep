@@ -70,8 +70,11 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
 <div id="loginView" class="login">
   <h1>🛕 Quản trị chùa</h1>
   <p class="muted">Chùa Tổ Nghiệp Designer · PikLab</p>
-  <input id="pw" type="password" placeholder="Mật khẩu quản trị">
-  <button class="btn" id="loginBtn" style="width:100%">Đăng nhập</button>
+  <label for="pw" class="muted" style="display:block;margin-top:14px">Mật khẩu quản trị</label>
+  <input id="pw" type="password" placeholder="Nhập mật khẩu" autocomplete="current-password" autocapitalize="off" spellcheck="false" style="margin:8px 0;width:100%;position:relative;z-index:5;pointer-events:auto;user-select:text;-webkit-user-select:text">
+  <label style="display:flex;align-items:center;gap:8px;margin:3px 0 12px;font-size:12px"><input id="showPw" type="checkbox" style="width:auto;margin:0"> Hiện mật khẩu để kiểm tra</label>
+  <button class="btn ghost" type="button" id="fallbackPw" style="width:100%;margin-bottom:10px">Không gõ được? Nhập bằng hộp thoại</button>
+  <button class="btn" id="loginBtn" type="button" style="width:100%">Đăng nhập</button>
   <p id="loginErr" style="color:#b2412b"></p>
 </div>
 
@@ -169,13 +172,29 @@ async function api(path, opt = {}) {
 }
 function logout() { token = ''; sessionStorage.removeItem('pk_admin'); $('#app').classList.add('hidden'); $('#loginView').classList.remove('hidden'); }
 $('#logout').onclick = e => { e.preventDefault(); logout(); };
+const pwInput = $('#pw');
+$('#showPw').addEventListener('change', e => { pwInput.type = e.target.checked ? 'text' : 'password'; pwInput.focus(); });
+$('#fallbackPw').addEventListener('click', () => {
+  const value = window.prompt('Nhập mật khẩu quản trị (nội dung sẽ hiển thị rõ trong hộp thoại):');
+  if (value === null) return;
+  pwInput.value = value;
+  $('#loginErr').textContent = 'Đã nhận ' + value.length + ' ký tự. Nhấn Đăng nhập.';
+});
 async function login() {
-  const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: $('#pw').value }) });
-  const j = await r.json();
-  if (!j.token) return $('#loginErr').textContent = j.error || 'Lỗi';
-  token = j.token; sessionStorage.setItem('pk_admin', token); start();
+  $('#loginErr').textContent = '';
+  const password = pwInput.value;
+  if (!password) { $('#loginErr').textContent = 'Chưa nhập mật khẩu.'; pwInput.focus(); return; }
+  const button = $('#loginBtn'); button.disabled = true;
+  try {
+    const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+    const j = await r.json();
+    if (!r.ok || !j.token) { $('#loginErr').textContent = j.error || 'Đăng nhập thất bại (' + r.status + ')'; return; }
+    token = j.token; sessionStorage.setItem('pk_admin', token); pwInput.value = ''; start();
+  } catch (err) { $('#loginErr').textContent = 'Không kết nối được server. Thử lại sau.'; }
+  finally { button.disabled = false; }
 }
-$('#loginBtn').onclick = login; $('#pw').onkeydown = e => e.key === 'Enter' && login();
+$('#loginBtn').addEventListener('click', login);
+pwInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); login(); } });
 
 let tab = 'overview';
 document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
