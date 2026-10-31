@@ -46,47 +46,55 @@
 <!-- Màn hình vào chùa -->
 <div id="intro" class="modal-wrap">
   <div class="card intro">
-    <div class="intro-art">🛕</div>
-    <p class="eyebrow">PikLab presents</p>
-    <h1 id="templeTitle">Chùa Tổ Nghiệp Designer</h1>
-    <p class="lead">Thắp nén hương cho các vị tổ Photoshop, Illustrator, Blender… cầu khách duyệt file ngay lần đầu. Ra vườn cuốc đất — biết đâu đào trúng voucher PikLab.</p>
+    <aside class="intro-hero">
+      <div class="hero-mark">🛕</div>
+      <p class="eyebrow">PikLab presents</p>
+      <h1 id="templeTitle">Chùa Tổ Nghiệp Designer</h1>
+      <p class="lead">Ngôi chùa online cho dân thiết kế. Cầu khách duyệt file ngay lần đầu, tích phước và rinh voucher PikLab.</p>
+      <ul class="hero-list">
+        <li><span>🪔</span>Thắp hương cho tổ Photoshop, Figma, Blender…</li>
+        <li><span>⛏️</span>Cuốc đất vườn chùa, đào trúng voucher</li>
+        <li><span>🪢</span>Chợ quê: gieo quẻ, kéo co, ăn phở vỉa hè</li>
+      </ul>
+      <p id="liveInfo" class="live"></p>
+    </aside>
 
-    <div id="vLoading" class="muted small">Đang mở cổng chùa…</div>
+    <section class="intro-form">
+      <div id="vLoading" class="muted small">Đang mở cổng chùa…</div>
 
-    <div id="vBack" class="hidden">
-      <div class="back-box"><span id="backAv" class="av"></span><div><small>Chào mừng trở lại</small><b id="backName">…</b></div></div>
-      <button id="backEnter" class="primary">Vào chùa 🙏</button>
-      <button id="backSwitch" class="linkbtn">Đăng nhập bằng tài khoản khác</button>
-    </div>
-
-    <form id="vAuth" class="hidden" autocomplete="on" onsubmit="return false">
-      <div class="tabs"><button type="button" data-tab="reg" class="on">Lần đầu đến chùa</button><button type="button" data-tab="login">Đã có tài khoản</button></div>
-      <label>Email</label>
-      <input id="emailInput" type="email" autocomplete="email" placeholder="ban@email.com" maxlength="120">
-      <label>Mật khẩu</label>
-      <input id="pwInput" type="password" autocomplete="new-password" placeholder="Ít nhất 6 ký tự" maxlength="100">
-      <div id="regOnly">
-        <label>Pháp danh <span class="hint-l">(mọi người chỉ thấy tên này)</span></label>
-        <input id="nameInput" maxlength="18" placeholder="VD: Thích Kéo Layer" autocomplete="nickname">
-        <label>Màu áo</label>
-        <div id="colorPick" class="swatches"></div>
-        <label>Kiểu tóc</label>
-        <div id="hairPick" class="hats">
-          <button type="button" data-hair="bun" class="sel">Búi tó</button>
-          <button type="button" data-hair="bald">Đầu thiền</button>
-        </div>
-        <label>Đội đầu</label>
-        <div id="hatPick" class="hats">
-          <button type="button" data-h="none" class="sel">Không</button>
-          <button type="button" data-h="non">Nón lá</button>
-        </div>
-        <p class="muted small" style="text-align:left;margin-top:8px">Nhiều màu áo, khăn xếp, nón quai thao… bán ở khu chợ trước cổng chùa.</p>
+      <div id="vBack" class="hidden">
+        <h2 class="form-title">Chào mừng trở lại</h2>
+        <div class="back-box"><span id="backAv" class="av"></span><div><small>Pháp danh</small><b id="backName">…</b></div></div>
+        <button id="backEnter" class="primary">Vào chùa 🙏</button>
+        <button id="backSwitch" class="linkbtn">Đăng nhập bằng tài khoản khác</button>
       </div>
-      <p id="authErr" class="err"></p>
-      <button id="enterBtn" type="submit" class="primary">Tạo tài khoản &amp; vào chùa 🙏</button>
-      <p class="muted small privacy">🔒 Email chỉ dùng để đăng nhập và để PikLab liên hệ trao quà. Người chơi khác chỉ thấy pháp danh của bạn.</p>
-    </form>
-    <p id="liveInfo" class="muted small"></p>
+
+      <form id="vAuth" class="hidden" autocomplete="on" onsubmit="return false">
+        <div class="tabs"><button type="button" data-tab="reg" class="on">Lần đầu đến chùa</button><button type="button" data-tab="login">Đã có tài khoản</button></div>
+        <div class="field"><label for="emailInput">Email</label>
+          <input id="emailInput" type="email" autocomplete="email" placeholder="ban@email.com" maxlength="120"></div>
+        <div class="field"><label for="pwInput">Mật khẩu</label>
+          <input id="pwInput" type="password" autocomplete="new-password" placeholder="Ít nhất 6 ký tự" maxlength="100"></div>
+        <div id="regOnly">
+          <div class="field"><label for="nameInput">Pháp danh <span class="hint-l">· người khác chỉ thấy tên này</span></label>
+            <input id="nameInput" maxlength="18" placeholder="VD: Thích Kéo Layer" autocomplete="nickname"></div>
+          <div class="char-box">
+            <div class="pv" id="pv" aria-hidden="true"><i class="pv-hat"></i><i class="pv-bun"></i><i class="pv-head"><b></b></i><i class="pv-robe"></i></div>
+            <div class="char-opts">
+              <div class="opt"><span>Áo</span><div id="colorPick" class="swatches"></div></div>
+              <div class="opt"><span>Tóc</span><div id="hairPick" class="seg">
+                <button type="button" data-hair="bun" class="sel">Búi tó</button><button type="button" data-hair="bald">Đầu thiền</button></div></div>
+              <div class="opt"><span>Đội</span><div id="hatPick" class="seg">
+                <button type="button" data-h="none" class="sel">Không</button><button type="button" data-h="non">Nón lá</button></div></div>
+            </div>
+          </div>
+          <p class="char-note">Thêm áo, khăn xếp, nón quai thao… bán ở chợ trước cổng chùa.</p>
+        </div>
+        <p id="authErr" class="err"></p>
+        <button id="enterBtn" type="submit" class="primary">Tạo tài khoản &amp; vào chùa 🙏</button>
+        <p class="privacy">🔒 Email chỉ dùng để đăng nhập và trao quà, không công khai.</p>
+      </form>
+    </section>
   </div>
 </div>
 
@@ -169,5 +177,18 @@
 <script src="rules.js"></script>
 <script src="local.js"></script>
 <script src="game.js"></script>
+<script>
+(function () {
+  var pv = document.getElementById('pv'); if (!pv) return;
+  function sync() {
+    var c = document.querySelector('#colorPick .sel'), h = document.querySelector('#hairPick .sel'), t = document.querySelector('#hatPick .sel');
+    pv.style.setProperty('--robe', c ? c.dataset.c : '#7a5a43');
+    pv.classList.toggle('bald', !!h && h.dataset.hair === 'bald');
+    pv.classList.toggle('non', !!t && t.dataset.h === 'non');
+  }
+  ['colorPick', 'hairPick', 'hatPick'].forEach(function (id) { document.getElementById(id).addEventListener('click', function () { setTimeout(sync, 0); }); });
+  sync();
+})();
+</script>
 </body>
 </html>
