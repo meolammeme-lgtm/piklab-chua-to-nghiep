@@ -52,6 +52,44 @@ function loadImg(src, cb) {
   im.onload = () => cb(im); im.src = src; imgCache[src] = im;
 }
 
+/* ---------------- Ánh sáng theo giờ Việt Nam ---------------- */
+const SKY_KEYS = [ // giờ, màu nắng, trời, đất, phơi sáng, bão hoà, đèn, nền trên, nền dưới
+  [0, [.16, .2, .36], [.12, .15, .27], [.06, .06, .09], 1.0, .62, 1.7, '#1c2232', '#0f121c'],
+  [4.8, [.2, .22, .38], [.16, .18, .3], [.08, .08, .11], 1.0, .64, 1.6, '#262c42', '#141826'],
+  [6.0, [1.0, .66, .5], [.42, .4, .5], [.24, .2, .2], 1.0, .72, .8, '#cdb2a8', '#7d7487'],
+  [8.0, [1.28, 1.18, 1.0], [.5, .54, .6], [.32, .28, .23], 1.0, .8, .3, '#c7ccc6', '#959d99'],
+  [12.0, [1.38, 1.32, 1.16], [.52, .56, .62], [.34, .3, .25], 1.0, .8, .25, '#cdd1cb', '#a0a7a2'],
+  [16.0, [1.35, 1.2, .95], [.5, .51, .56], [.33, .27, .22], 1.0, .8, .3, '#d1c8b8', '#a0988b'],
+  [17.6, [1.3, .88, .6], [.45, .4, .46], [.29, .22, .18], 1.0, .78, .7, '#d4b29c', '#8f7470'],
+  [18.6, [.55, .4, .48], [.3, .28, .4], [.14, .12, .15], 1.0, .7, 1.25, '#5f5370', '#352f44'],
+  [19.6, [.16, .2, .36], [.12, .15, .27], [.06, .06, .09], 1.0, .62, 1.7, '#1c2232', '#0f121c'],
+  [24, [.16, .2, .36], [.12, .15, .27], [.06, .06, .09], 1.0, .62, 1.7, '#1c2232', '#0f121c']
+];
+const PREVIEW = [null, 6.3, 10, 17.4, 21];
+let previewIdx = 0;
+function vnHour() { const d = new Date(Date.now() + 7 * 3600e3); return d.getUTCHours() + d.getUTCMinutes() / 60; }
+const lerp = (a, b, k) => a + (b - a) * k, lerp3 = (a, b, k) => a.map((v, i) => lerp(v, b[i], k));
+const hex2 = h => [1, 3, 5].map(i => parseInt(h.substr(i, 2), 16)), rgb = c => `rgb(${c.map(v => Math.round(v)).join(',')})`;
+let lastBg = '';
+function applySky() {
+  const h = PREVIEW[previewIdx] != null ? PREVIEW[previewIdx] : vnHour();
+  let i = 0; while (i < SKY_KEYS.length - 2 && SKY_KEYS[i + 1][0] <= h) i++;
+  const A = SKY_KEYS[i], B = SKY_KEYS[i + 1], k = (h - A[0]) / (B[0] - A[0] || 1);
+  const e = R.env;
+  e.sunC = lerp3(A[1], B[1], k); e.sky = lerp3(A[2], B[2], k); e.gnd = lerp3(A[3], B[3], k);
+  e.exp = lerp(A[4], B[4], k); e.sat = lerp(A[5], B[5], k); e.glow = lerp(A[6], B[6], k);
+  const day = h >= 6 && h <= 18.4;
+  if (day) { const a = (h - 6) / 12.4 * Math.PI; e.sun = norm([Math.cos(a) * .95, Math.max(.55, Math.sin(a) * 1.3), .3]); }
+  else e.sun = norm([-.45, 1, .35]);
+  S.night = Math.max(0, Math.min(1, (e.glow - .3) / 1.4));
+  const bg = `radial-gradient(120% 90% at 50% 35%, ${rgb(lerp3(hex2(A[7]), hex2(B[7]), k))} 0%, ${rgb(lerp3(hex2(A[8]), hex2(B[8]), k))} 100%)`;
+  if (bg !== lastBg) { document.body.style.background = bg; lastBg = bg; }
+  const hh = Math.floor(h), mm2 = Math.floor((h - hh) * 60);
+  const icon = h < 5 || h >= 19.5 ? '🌙' : h < 7 ? '🌅' : h < 17 ? '☀️' : h < 18.8 ? '🌇' : '🌙';
+  const label = `${icon} ${String(hh).padStart(2, '0')}:${String(mm2).padStart(2, '0')}${previewIdx ? ' (xem thử)' : ''}`;
+  const el = $('#clockBtn'); if (el && el.textContent !== label) el.textContent = label;
+}
+
 /* ---------------- Âm thanh ---------------- */
 let AC = null;
 function ac() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
@@ -73,22 +111,26 @@ const sfx = {
 
 /* ---------------- Kết nối (server thật hoặc demo) ---------------- */
 let welcomed = false;
+const tokenKey = () => S.demo ? 'pk_token_demo' : 'pk_token';
 function startDemo() {
-  S.demo = true;
   const ls = window.LocalServer(onMsg);
   S.net = { send: o => ls.send(o), local: ls };
   $('#demoBtn').classList.remove('hidden');
-  ls.send({ t: 'hello', pid, name: choice.name, color: choice.color, hat: choice.hat });
+  ls.send({ t: 'hello', token: S.token });
 }
 function connect() {
-  if (DEMO_FORCED) return startDemo();
-  let ws;
-  try { ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`); } catch (e) { return startDemo(); }
-  S.net = { send: o => ws.readyState === 1 && ws.send(JSON.stringify(o)) };
-  const fail = setTimeout(() => { if (!welcomed) { try { ws.close(); } catch (e) {} startDemo(); } }, 4000);
-  ws.onopen = () => { $('#conn').classList.add('hidden'); ws.send(JSON.stringify({ t: 'hello', pid, name: choice.name, color: choice.color, hat: choice.hat })); };
-  ws.onmessage = e => { clearTimeout(fail); onMsg(JSON.parse(e.data)); };
-  ws.onclose = () => { if (S.demo) return; if (!welcomed) { clearTimeout(fail); return startDemo(); } $('#conn').classList.remove('hidden'); setTimeout(connect, 2000); };
+  if (S.demo) return startDemo();
+  if (S.kicked) return;
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
+  S.net = { send: o => ws.readyState === 1 && ws.send(JSON.stringify(o)), ws };
+  ws.onopen = () => { $('#conn').classList.add('hidden'); ws.send(JSON.stringify({ t: 'hello', token: S.token })); };
+  ws.onmessage = e => onMsg(JSON.parse(e.data));
+  ws.onclose = () => { if (S.kicked || S.authFailed) return; $('#conn').classList.remove('hidden'); setTimeout(connect, 2000); };
+}
+async function authCall(kind, body) {
+  if (S.demo) return window.LocalAuth(kind, body);
+  try { const r = await fetch('/api/auth/' + kind, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return await r.json(); }
+  catch (e) { return { error: 'Không kết nối được tới chùa, vui lòng thử lại.' }; }
 }
 const send = o => S.net && S.net.send(o);
 
@@ -132,6 +174,8 @@ function onMsg(m) {
       break;
     }
     case 'feed': ticker(m.msg); break;
+    case 'authError': S.authFailed = true; sset(tokenKey(), ''); S.token = ''; backToIntro(m.msg); break;
+    case 'kicked': S.kicked = true; $('#conn').classList.add('hidden'); $('#resultCard').innerHTML = m.banned ? `<div class="big">🔒</div><h2>Tài khoản đã bị khoá</h2><p class="muted">${esc(m.msg)}</p>` : `<div class="big">🙏</div><h2>Bạn đã vào chùa ở nơi khác</h2><p class="muted">${esc(m.msg)} Mỗi tài khoản chỉ ở một nơi cùng lúc để tránh spam lượt đào.</p><button class="primary" onclick="location.reload()">Vào lại tại đây</button>`; if (m.banned) sset(tokenKey(), ''); $('#resultModal').classList.remove('hidden'); break;
     case 'toast': toast(m.msg); S.busy = false; break;
     case 'profile': setProfile(m.profile); if (m.msg) toast(m.msg); S.busy = false; break;
     case 'digResult': S.busy = false; setProfile(m.profile); showDigResult(m); break;
@@ -295,7 +339,7 @@ function frameItems(t) {
   items.push(...scene.texItems);
   plaques.forEach(p => { items.push({ mesh: plaqueBack, m: p.m }); items.push({ mesh: plaqueQuad, m: p.m, tex: p.tex, em: .22 }); });
   if (S.roofA > .02) items.push({ mesh: scene.roof.mesh, alpha: S.roofA >= .99 ? undefined : S.roofA });
-  items.push({ mesh: scene.gate.mesh, alpha: S.gateA >= .99 ? undefined : S.gateA }, Object.assign({}, scene.gateSign, { alpha: S.gateA >= .99 ? undefined : S.gateA }));
+  if (S.gateA > .03) items.push({ mesh: scene.gate.mesh, alpha: S.gateA >= .99 ? undefined : S.gateA }, Object.assign({}, scene.gateSign, { alpha: S.gateA >= .99 ? undefined : S.gateA }));
   // luống rau
   const now = Date.now() + S.serverOffset;
   L.plots.forEach(p => {
@@ -345,6 +389,14 @@ function frameItems(t) {
 /* ---------------- Overlay 2D (tên, lời nguyện, khói…) ---------------- */
 function drawOverlay(t) {
   octx.setTransform(dpr, 0, 0, dpr, 0, 0); octx.clearRect(0, 0, innerWidth, innerHeight);
+  if (S.night > .05) { // quầng sáng đèn lồng, nến và đom đóm ban đêm
+    octx.globalCompositeOperation = 'lighter';
+    const sc = 15 / S.dist, glowAt = (x, y, z, r, a) => { const p = project(x, y, z); if (!p) return; const rr = r * sc, g = octx.createRadialGradient(p[0], p[1], 0, p[0], p[1], rr); g.addColorStop(0, `rgba(255,170,90,${a * S.night})`); g.addColorStop(1, 'rgba(255,140,60,0)'); octx.fillStyle = g; octx.fillRect(p[0] - rr, p[1] - rr, rr * 2, rr * 2); };
+    for (const l of L.lanterns) glowAt(l.x * K + (l.x < 1000 ? .36 : -.36), 1.2, l.y * K, 90, .38);
+    glowAt(8.05, 1.6, 2.05, 60, .4); glowAt(11.95, 1.6, 2.05, 60, .4); glowAt(L.bowl.x * K, 1.1, L.bowl.y * K, 80, .3);
+    for (let i = 0; i < 26; i++) { const fx = 2 + (i * 7.31 % 16) + Math.sin(t / 2100 + i) * .6, fz = 2.5 + (i * 3.77 % 10.5) + Math.cos(t / 1800 + i * 2) * .5, f = .5 + .5 * Math.sin(t / 340 + i * 5); glowAt(fx, .6 + Math.sin(t / 900 + i) * .3, fz, 10, .9 * f); }
+    octx.globalCompositeOperation = 'source-over';
+  }
   // hạt
   for (const p of S.particles) {
     const s = project(p.x, p.y, p.z); if (!s) continue; const k = p.age / p.life, sc = 15 / S.dist;
@@ -470,6 +522,7 @@ function openBag() {
 function closeModals() { document.querySelectorAll('.modal-wrap:not(#intro)').forEach(m => m.classList.add('hidden')); }
 document.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeModals(); else if (e.target.classList.contains('modal-wrap') && e.target.id !== 'intro') closeModals(); });
 $('#bagBtn').onclick = openBag;
+$('#clockBtn').onclick = () => { previewIdx = (previewIdx + 1) % PREVIEW.length; applySky(); toast(previewIdx ? `Xem thử khung giờ ${['', 'bình minh', 'buổi sáng', 'hoàng hôn', 'buổi tối'][previewIdx]}` : 'Ánh sáng theo giờ Việt Nam thực tế'); };
 $('#roomBtn').onclick = () => $('#roomList').classList.toggle('hidden');
 $('#actionBtn').onclick = doInteract;
 const updSound = () => { $('#soundBtn').textContent = S.sound ? '🔔' : '🔕'; };
@@ -506,27 +559,65 @@ $('#demoBody').addEventListener('click', e => {
   if (e.target.id === 'resetDigs') cfg.reset();
 });
 
-/* ---------------- Màn hình vào ---------------- */
-$('#colorPick').innerHTML = COLORS.map(c => `<button data-c="${c}" style="background:${c}" class="${c === choice.color ? 'sel' : ''}"></button>`).join('');
+/* ---------------- Màn hình vào (đăng ký / đăng nhập) ---------------- */
+$('#colorPick').innerHTML = COLORS.map(c => `<button type="button" data-c="${c}" style="background:${c}" class="${c === choice.color ? 'sel' : ''}"></button>`).join('');
 $('#colorPick').onclick = e => { const b = e.target.closest('button'); if (!b) return; choice.color = b.dataset.c; document.querySelectorAll('#colorPick button').forEach(x => x.classList.toggle('sel', x === b)); };
 $('#hatPick').onclick = e => { const b = e.target.closest('button'); if (!b) return; choice.hat = b.dataset.h; document.querySelectorAll('#hatPick button').forEach(x => x.classList.toggle('sel', x === b)); };
 document.querySelectorAll('#hatPick button').forEach(x => x.classList.toggle('sel', x.dataset.h === choice.hat));
-$('#nameInput').value = choice.name;
-if (!DEMO_FORCED) fetch('/api/public/info').then(r => r.json()).then(i => {
-  $('#templeTitle').textContent = i.templeName; $('#liveInfo').textContent = `🟢 ${i.online} người đang ở chùa · ${i.rooms.length} khuôn viên đang mở`;
-}).catch(() => { $('#liveInfo').textContent = 'Bản demo offline · có bạn đồng tu mô phỏng'; });
-else $('#liveInfo').textContent = 'Bản demo offline · có bạn đồng tu mô phỏng';
-function enter() {
-  const NAMES = ['Thích Kéo Layer', 'Thích Căn Lề', 'Thích Pen Tool', 'Thích Gradient', 'Thích Keyframe', 'Thích Render'];
-  choice.name = $('#nameInput').value.trim() || NAMES[(Math.random() * NAMES.length) | 0];
-  sset('pk_name', choice.name); sset('pk_color', choice.color); sset('pk_hat', choice.hat);
+let authTab = 'reg';
+function setTab(t) {
+  authTab = t; document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+  $('#regOnly').classList.toggle('hidden', t !== 'reg'); $('#authErr').textContent = '';
+  $('#pwInput').autocomplete = t === 'reg' ? 'new-password' : 'current-password';
+  $('#enterBtn').textContent = t === 'reg' ? 'Tạo tài khoản & vào chùa 🙏' : 'Đăng nhập & vào chùa 🙏';
+}
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => setTab(b.dataset.tab));
+function showView(v) { ['vLoading', 'vBack', 'vAuth'].forEach(id => $('#' + id).classList.toggle('hidden', id !== v)); }
+async function initIntro() {
+  if (DEMO_FORCED) S.demo = true;
+  else {
+    try { const i = await (await fetch('/api/public/info')).json(); $('#templeTitle').textContent = i.templeName; $('#liveInfo').textContent = `🟢 ${i.online} người đang ở chùa · ${i.rooms.length} khuôn viên đang mở`; }
+    catch (e) { S.demo = true; }
+  }
+  if (S.demo) $('#liveInfo').textContent = 'Bản demo offline · tài khoản lưu trên máy này · bạn đồng tu là bot mô phỏng';
+  S.token = sget(tokenKey()) || '';
+  if (S.token) {
+    const r = await authCall('me', { token: S.token });
+    if (r.account) { $('#backName').textContent = r.account.name; $('#backAv').style.background = r.account.color; return showView('vBack'); }
+    sset(tokenKey(), ''); S.token = '';
+  }
+  setTab(sget('pk_has_account') ? 'login' : 'reg'); showView('vAuth');
+}
+async function submitAuth() {
+  const btn = $('#enterBtn'); if (btn.disabled) return;
+  const body = { email: $('#emailInput').value.trim(), password: $('#pwInput').value };
+  if (authTab === 'reg') Object.assign(body, { name: $('#nameInput').value.trim(), color: choice.color, hat: choice.hat });
+  btn.disabled = true; $('#authErr').textContent = '';
+  const r = await authCall(authTab === 'reg' ? 'register' : 'login', body);
+  btn.disabled = false;
+  if (!r.token) { $('#authErr').textContent = r.error || 'Có lỗi, vui lòng thử lại.'; return; }
+  S.token = r.token; sset(tokenKey(), r.token); sset('pk_has_account', '1'); $('#pwInput').value = '';
+  enterTemple();
+}
+function enterTemple() {
+  S.authFailed = false;
   $('#intro').classList.add('hidden'); $('#hud').classList.remove('hidden');
   ac(); sfx.bell();
   connect();
   setTimeout(() => $('#hint').style.opacity = 0, 10000);
 }
-$('#enterBtn').onclick = enter;
-$('#nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') enter(); });
+function backToIntro(msg) {
+  try { S.net && S.net.ws && S.net.ws.close(); } catch (e) {}
+  S.me = null; S.players.clear(); welcomed = false;
+  $('#hud').classList.add('hidden'); $('#intro').classList.remove('hidden');
+  setTab('login'); showView('vAuth'); $('#authErr').textContent = msg || '';
+}
+$('#enterBtn').onclick = submitAuth;
+$('#vAuth').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.tagName === 'INPUT') { e.preventDefault(); submitAuth(); } });
+$('#backEnter').onclick = enterTemple;
+$('#backSwitch').onclick = async () => { await authCall('logout', { token: S.token }); sset(tokenKey(), ''); S.token = ''; setTab('login'); showView('vAuth'); };
+$('#logoutBtn').onclick = async () => { await authCall('logout', { token: S.token }); sset(tokenKey(), ''); location.reload(); };
+initIntro();
 
 /* ---------------- Điều khiển ---------------- */
 addEventListener('keydown', e => {
@@ -569,12 +660,13 @@ function frame(t) {
     const inHall = S.me.y < 560 && S.me.x > 650 && S.me.x < 1350;
     S.roofA += ((inHall ? 0 : 1) - S.roofA) * Math.min(1, rdt * 6);
     S.hallK += ((S.me.y < 520 && S.me.x > 700 && S.me.x < 1300 ? 1 : 0) - S.hallK) * Math.min(1, rdt * 3);
-    S.gateA += ((S.me.y > 1180 && Math.abs(S.me.x - 1000) < 320 ? .25 : 1) - S.gateA) * Math.min(1, rdt * 6);
+    S.gateA += ((S.me.y > 1150 && Math.abs(S.me.x - 1000) < 340 ? 0 : 1) - S.gateA) * Math.min(1, rdt * 6);
     S.interact = findInteract(t);
     const btn = $('#actionBtn');
     if (S.interact) { btn.classList.remove('hidden'); btn.classList.toggle('busy', S.busy); $('#actionIcon').textContent = S.interact.icon; $('#actionText').textContent = S.busy ? 'Đang cuốc đất…' : S.interact.text; }
     else btn.classList.add('hidden');
   } else { S.cam.x = 10 + Math.sin(t / 6000) * 3; S.cam.z = 6.5 + Math.cos(t / 7000) * 1.5; }
+  if (!S.skyT || t - S.skyT > 1000) { S.skyT = t; applySky(); }
   updateCamera(S.me ? dt : 1);
   stepParticles(dt);
   if (!S.noRender) { R.render(frameItems(t), cam, cam.tgt, Math.max(10, S.dist * .85)); drawOverlay(t); }
