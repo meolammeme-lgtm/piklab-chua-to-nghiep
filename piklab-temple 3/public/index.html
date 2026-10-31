@@ -23,6 +23,7 @@
   <div class="hud-tr">
     <button id="clockBtn" class="chip glass btn" title="Ánh sáng theo giờ Việt Nam · bấm để xem thử các khung giờ">☀️</button>
     <div class="chip glass" title="Điểm phước">🍀 <b id="phuoc">0</b></div>
+    <div class="chip glass stam" title="Sinh lực — hết thì ra Quán Ăn Vỉa Hè ăn bát phở">💪 <span class="sbar"><i id="stBar"></i></span><b id="st">100</b></div>
     <div class="chip glass" title="Bó rau trong túi">🥬 <b id="rau">0</b></div>
     <div class="chip glass" title="Lượt đào hôm nay">⛏️ <b id="digs">3</b></div>
     <button id="bagBtn" class="chip glass btn">🎒 Túi</button>
@@ -38,7 +39,7 @@
     <button class="emote glass" data-e="wave" title="Chào">👋</button>
   </div>
   <button id="actionBtn" class="hidden"><span id="actionIcon">🪔</span><span id="actionText">Thắp hương</span><kbd>E</kbd></button>
-  <canvas id="minimap" class="glass" width="200" height="150" title="Bấm để đi tới"></canvas>
+  <canvas id="minimap" class="glass" width="200" height="230" title="Bấm để đi tới"></canvas>
   <div id="hint" class="glass">Đi lại: <kbd>W A S D</kbd> / phím mũi tên hoặc <b>chạm vào nơi muốn đến</b> · Tương tác: <kbd>E</kbd> · Thu phóng: cuộn chuột / <kbd>+</kbd> <kbd>−</kbd></div>
 </div>
 
@@ -69,15 +70,17 @@
         <input id="nameInput" maxlength="18" placeholder="VD: Thích Kéo Layer" autocomplete="nickname">
         <label>Màu áo</label>
         <div id="colorPick" class="swatches"></div>
-        <label>Kiểu đầu</label>
-        <div id="hatPick" class="hats">
-          <button type="button" data-h="none" class="sel">Tóc búi</button>
-          <button type="button" data-h="bald">Đầu thiền</button>
-          <button type="button" data-h="non">Nón lá</button>
-          <button type="button" data-h="khan">Khăn xếp</button>
-          <button type="button" data-h="beanie">Mũ len</button>
-          <button type="button" data-h="headphone">Tai nghe</button>
+        <label>Kiểu tóc</label>
+        <div id="hairPick" class="hats">
+          <button type="button" data-hair="bun" class="sel">Búi tó</button>
+          <button type="button" data-hair="bald">Đầu thiền</button>
         </div>
+        <label>Đội đầu</label>
+        <div id="hatPick" class="hats">
+          <button type="button" data-h="none" class="sel">Không</button>
+          <button type="button" data-h="non">Nón lá</button>
+        </div>
+        <p class="muted small" style="text-align:left;margin-top:8px">Nhiều màu áo, khăn xếp, nón quai thao… bán ở khu chợ trước cổng chùa.</p>
       </div>
       <p id="authErr" class="err"></p>
       <button id="enterBtn" type="submit" class="primary">Tạo tài khoản &amp; vào chùa 🙏</button>
@@ -125,12 +128,45 @@
   </div>
 </div>
 
+<!-- Cửa hàng / quán ăn / cắt tóc / tủ đồ -->
+<div id="shopModal" class="modal-wrap hidden">
+  <div class="card shop">
+    <button class="x" data-close>✕</button>
+    <h2 id="shopTitle">Cửa hàng</h2>
+    <p id="shopSub" class="muted"></p>
+    <div id="shopBody" class="shop-grid"></div>
+    <p class="muted small" id="shopFoot"></p>
+  </div>
+</div>
+
+<!-- Sân kéo co -->
+<div id="tugModal" class="modal-wrap hidden">
+  <div class="card">
+    <button class="x" data-close>✕</button>
+    <h2>🪢 Sân Kéo Co</h2>
+    <p class="muted">Đấu 1-1: ai bấm <kbd>Ctrl</kbd>+<kbd>Z</kbd> (Mac: <kbd>⌘</kbd>+<kbd>Z</kbd>) nhanh hơn sẽ kéo được dây và lấy phần phước đối thủ cược. Trò giải trí, không quy đổi ra tiền.</p>
+    <div id="tugBody"></div>
+  </div>
+</div>
+<div id="tugHud" class="hidden">
+  <div class="tug-names"><b id="tugA">A</b><span id="tugBet">cược 10</span><b id="tugB">B</b></div>
+  <div class="tug-bar"><i id="tugKnot"></i><span class="mid"></span></div>
+  <div id="tugMsg">3</div>
+  <button id="tugBtn">⌃Z / ⌘Z · KÉO!</button>
+</div>
+
+<!-- Bãi khẩu nghiệp -->
+<form id="sayBar" class="hidden glass" onsubmit="return false">
+  <span>📢</span><input id="sayInput" maxlength="80" placeholder="Xả hết bực dọc ở đây… (mỗi câu tốn phước)" autocomplete="off"><button id="sayBtn" type="submit">Hét!</button>
+</form>
+
 <div id="toast"></div>
 <div id="conn" class="hidden">Đang kết nối lại với chùa…</div>
 
 <script src="layout.js"></script>
 <script src="engine.js"></script>
 <script src="world.js"></script>
+<script src="rules.js"></script>
 <script src="local.js"></script>
 <script src="game.js"></script>
 </body>
