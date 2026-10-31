@@ -146,7 +146,7 @@ function createRenderer(canvas) {
   precision highp float; precision highp sampler2DShadow;
   in vec3 vW; in vec3 vN; in vec3 vC; in vec2 vU; in vec4 vL;
   uniform sampler2DShadow uSh; uniform sampler2D uTex; uniform int uUseTex;
-  uniform vec3 uSun, uSunC, uSky, uGnd, uCam; uniform float uEm, uAlpha;
+  uniform vec3 uSun, uSunC, uSky, uGnd, uCam; uniform float uEm, uAlpha, uExp, uSat, uGlow;
   out vec4 o;
   float shadow(){ vec3 p=vL.xyz/vL.w*.5+.5; if(p.x<0.||p.x>1.||p.y<0.||p.y>1.||p.z>1.) return 1.;
     vec2 t=1./vec2(textureSize(uSh,0)); float s=0.;
@@ -154,14 +154,15 @@ function createRenderer(canvas) {
     return s/25.; }
   void main(){
     vec3 n=normalize(vN); vec3 base=vC; float a=uAlpha;
-    if(uUseTex==1){ vec4 t=texture(uTex,vU); base=mix(base, pow(t.rgb, vec3(2.2)), t.a); }
+    if(uUseTex==1){ vec4 t=texture(uTex,vU); if(t.a<.5) discard; base=pow(t.rgb, vec3(2.2)); }
     float d=max(dot(n,uSun),0.); d = d*.85 + .15*smoothstep(-.2,.6,dot(n,uSun));
     float s=shadow();
     vec3 hemi=mix(uGnd,uSky,n.y*.5+.5);
     float ao = n.y < .7 ? mix(.62,1.,smoothstep(0.,.45,vW.y)) : 1.;
     vec3 v=normalize(uCam-vW); float rim=pow(1.-max(dot(n,v),0.),3.)*.12;
-    vec3 c = base*(hemi*ao + uSunC*d*mix(.22,1.,s)) + rim*uSky*base*1.5 + base*uEm*2.2;
-    c *= .78; c = clamp((c*(2.51*c+.03))/(c*(2.43*c+.59)+.14), 0., 1.);
+    vec3 c = base*(hemi*ao + uSunC*d*mix(.25,1.,s)) + rim*uSky*base*1.5 + base*uEm*2.2*uGlow;
+    c *= .74*uExp; c = clamp((c*(2.51*c+.03))/(c*(2.43*c+.59)+.14), 0., 1.);
+    float l = dot(c, vec3(.299,.587,.114)); c = mix(vec3(l), c, uSat);
     o=vec4(pow(c,vec3(1./2.2)), a);
   }`;
   const SVS = `#version 300 es
@@ -169,7 +170,7 @@ function createRenderer(canvas) {
   const SFS = `#version 300 es
   precision mediump float; out vec4 o; void main(){ o=vec4(1.); }`;
   const main = prog(VS, FS), shp = prog(SVS, SFS);
-  const U = {}; ['uM', 'uVP', 'uLVP', 'uNM', 'uTint', 'uSh', 'uTex', 'uUseTex', 'uSun', 'uSunC', 'uSky', 'uGnd', 'uCam', 'uEm', 'uAlpha'].forEach(n => U[n] = gl.getUniformLocation(main, n));
+  const U = {}; ['uM', 'uVP', 'uLVP', 'uNM', 'uTint', 'uSh', 'uTex', 'uUseTex', 'uSun', 'uSunC', 'uSky', 'uGnd', 'uCam', 'uEm', 'uAlpha', 'uExp', 'uSat', 'uGlow'].forEach(n => U[n] = gl.getUniformLocation(main, n));
   const SU = { uM: gl.getUniformLocation(shp, 'uM'), uLVP: gl.getUniformLocation(shp, 'uLVP') };
 
   // shadow map
@@ -201,7 +202,7 @@ function createRenderer(canvas) {
     return t;
   }
 
-  const env = { sun: norm([-0.8, 1, 0.12]), sunC: [1.55, 1.36, 1.1], sky: [.52, .56, .68], gnd: [.36, .27, .2] };
+  const env = { sun: norm([-0.8, 1, 0.12]), sunC: [1.35, 1.25, 1.08], sky: [.5, .54, .6], gnd: [.33, .28, .23], exp: 1, sat: .82, glow: .3 };
 
   // items: {mesh, m, tint, em, alpha, tex, noShadow}
   function render(items, cam, lightTarget, lightSize) {
@@ -222,7 +223,7 @@ function createRenderer(canvas) {
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(main);
     gl.uniformMatrix4fv(U.uVP, false, cam.vp); gl.uniformMatrix4fv(U.uLVP, false, LVP);
-    gl.uniform3fv(U.uSun, env.sun); gl.uniform3fv(U.uSunC, env.sunC); gl.uniform3fv(U.uSky, env.sky); gl.uniform3fv(U.uGnd, env.gnd); gl.uniform3fv(U.uCam, cam.eye);
+    gl.uniform3fv(U.uSun, env.sun); gl.uniform3fv(U.uSunC, env.sunC); gl.uniform3fv(U.uSky, env.sky); gl.uniform3fv(U.uGnd, env.gnd); gl.uniform3fv(U.uCam, cam.eye); gl.uniform1f(U.uExp, env.exp); gl.uniform1f(U.uSat, env.sat); gl.uniform1f(U.uGlow, env.glow);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, depth); gl.uniform1i(U.uSh, 0);
     gl.uniform1i(U.uTex, 1);
     const draw = it => {
