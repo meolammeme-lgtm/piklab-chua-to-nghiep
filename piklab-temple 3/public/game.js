@@ -29,7 +29,16 @@ let choice = { color: COLORS.includes(sget('pk_color')) ? sget('pk_color') : COL
 
 /* ---------------- Renderer & cảnh ---------------- */
 let R = null, scene = null, dyn = null;
-try { R = window.ENGINE.createRenderer(cv); } catch (e) { console.error(e); }
+/* ---- Chất lượng đồ hoạ (giảm nóng máy) ---- */
+const GFX = {
+  high: { name: 'Đẹp', icon: '✨', dpr: 1.75, shadow: 2048, pcf: 1, fps: 60, idleFps: 30, aa: true, blur: true, fx: 1 },
+  mid:  { name: 'Cân bằng', icon: '⚖️', dpr: 1.25, shadow: 1024, pcf: 1, fps: 30, idleFps: 30, aa: true, blur: false, fx: 1 },
+  low:  { name: 'Tiết kiệm pin', icon: '🔋', dpr: 1, shadow: 1024, pcf: 0, fps: 30, idleFps: 20, aa: false, blur: false, fx: .4 }
+};
+let gfxKey = ['high', 'mid', 'low'].includes(sget('pk_gfx')) ? sget('pk_gfx') : 'mid';
+let G = GFX[gfxKey];
+try { R = window.ENGINE.createRenderer(cv, { antialias: G.aa, shadow: G.shadow, pcf: G.pcf, power: gfxKey === 'high' ? 'high-performance' : 'low-power' }); } catch (e) { console.error(e); }
+document.body.classList.toggle('noblur', !G.blur);
 if (!R) { document.body.insertAdjacentHTML('beforeend', '<div class="nogl">Trình duyệt chưa hỗ trợ WebGL2. Hãy mở bằng Chrome, Safari 15+ hoặc Firefox mới.</div>'); }
 else { scene = W3.build(R, L); dyn = W3.dynamicMeshes(R); }
 
@@ -220,7 +229,7 @@ function stepParticles(dt) {
   S.particles = S.particles.filter(p => p.age < p.life);
   if (S.particles.length > 700) S.particles.splice(0, S.particles.length - 700);
   // cánh hoa đào rơi
-  if (Math.random() < .25) {
+  if (Math.random() < .25 * G.fx) {
     const t = L.trees.filter(t => t.kind === 2)[Math.random() * 5 | 0] || L.trees[0];
     S.particles.push({ x: t.x * K + (Math.random() - .5) * 1.4, y: 2 + Math.random() * .5, z: t.y * K + (Math.random() - .5) * 1, vx: 0, vy: -.35, vz: .1, life: 9, age: 0, kind: 'petal', r: 3.5, seed: Math.random() * 7 });
   }
@@ -230,7 +239,7 @@ function stepParticles(dt) {
 const cam = { vp: null, eye: [0, 0, 0], f: [0, 0, -1], r: [1, 0, 0], u: [0, 1, 0], fov: 30 * Math.PI / 180, asp: 1 };
 let dpr = 1;
 function resize() {
-  dpr = Math.min(2, window.devicePixelRatio || 1);
+  dpr = Math.min(G.dpr, window.devicePixelRatio || 1);
   cv.width = innerWidth * dpr; cv.height = innerHeight * dpr; ov.width = innerWidth * dpr; ov.height = innerHeight * dpr;
   cam.asp = innerWidth / innerHeight;
   S.dist = cam.asp < .8 ? 21 : cam.asp < 1.2 ? 18 : 15;
@@ -521,7 +530,7 @@ function frameItems(t) {
     items.push({ mesh: dyn.stick, m: T(x, by, z, 0, 1, l, 1, lz, -lx), noShadow: true });
     const tip = [x + Math.sin(lx) * l, by + Math.cos(lz) * Math.cos(lx) * l, z + Math.sin(lz) * Math.cos(lx) * l], ty = tip[1];
     items.push({ mesh: dyn.tip, m: T(tip[0], ty, tip[2]), em: 1.4 + Math.sin(t / 150 + i) * .4, noShadow: true });
-    if (Math.random() < .07) S.particles.push({ x: tip[0], y: ty, z: tip[2], vx: (Math.random() - .5) * .1, vy: .35 + Math.random() * .2, vz: 0, life: 3.4, age: 0, kind: 'smoke', r: 2.5 });
+    if (Math.random() < .07 * G.fx) S.particles.push({ x: tip[0], y: ty, z: tip[2], vx: (Math.random() - .5) * .1, vy: .35 + Math.random() * .2, vz: 0, life: 3.4, age: 0, kind: 'smoke', r: 2.5 });
   });
   addSticks(L.bowl.x * K, .86, L.bowl.y * K - .05, .45, .62, 16);
   addSticks(10, 1.31, 2.0, .14, .32, 7);
@@ -572,7 +581,7 @@ function drawOverlay(t) {
     const sc = 15 / S.dist, glowAt = (x, y, z, r, a) => { const p = project(x, y, z); if (!p) return; const rr = r * sc, g = octx.createRadialGradient(p[0], p[1], 0, p[0], p[1], rr); g.addColorStop(0, `rgba(255,170,90,${a * S.night})`); g.addColorStop(1, 'rgba(255,140,60,0)'); octx.fillStyle = g; octx.fillRect(p[0] - rr, p[1] - rr, rr * 2, rr * 2); };
     for (const l of L.lanterns) glowAt(l.x * K + (l.x < 1000 ? .36 : -.36), 1.2, l.y * K, 90, .38);
     glowAt(8.05, 1.6, 2.05, 60, .4); glowAt(11.95, 1.6, 2.05, 60, .4); glowAt(L.bowl.x * K, 1.1, L.bowl.y * K, 80, .3);
-    for (let i = 0; i < 26; i++) { const fx = 2 + (i * 7.31 % 16) + Math.sin(t / 2100 + i) * .6, fz = 2.5 + (i * 3.77 % 10.5) + Math.cos(t / 1800 + i * 2) * .5, f = .5 + .5 * Math.sin(t / 340 + i * 5); glowAt(fx, .6 + Math.sin(t / 900 + i) * .3, fz, 10, .9 * f); }
+    for (let i = 0; i < Math.round(26 * G.fx); i++) { const fx = 2 + (i * 7.31 % 16) + Math.sin(t / 2100 + i) * .6, fz = 2.5 + (i * 3.77 % 10.5) + Math.cos(t / 1800 + i * 2) * .5, f = .5 + .5 * Math.sin(t / 340 + i * 5); glowAt(fx, .6 + Math.sin(t / 900 + i) * .3, fz, 10, .9 * f); }
     octx.globalCompositeOperation = 'source-over';
   }
   // hạt
@@ -653,7 +662,9 @@ function drawOverlay(t) {
 }
 
 /* ---------------- Minimap ---------------- */
+let mmT = 0;
 function drawMinimap() {
+  const now = performance.now(); if (now - mmT < 200) return; mmT = now;   // bản đồ nhỏ: 5 lần/giây là đủ
   const Wm = mm.width, Hm = mm.height, sx = Wm / L.W, sy = Hm / L.H;
   mctx.clearRect(0, 0, Wm, Hm);
   mctx.fillStyle = '#7dbb57'; mctx.fillRect(0, 0, Wm, Hm);
@@ -731,6 +742,15 @@ function closeModals() { document.querySelectorAll('.modal-wrap:not(#intro)').fo
 document.addEventListener('click', e => { if (e.target.closest('[data-close]')) closeModals(); else if (e.target.classList.contains('modal-wrap') && e.target.id !== 'intro') closeModals(); });
 $('#bagBtn').onclick = openBag;
 $('#clockBtn').onclick = () => { previewIdx = (previewIdx + 1) % PREVIEW.length; applySky(); toast(previewIdx ? `Xem thử khung giờ ${['', 'bình minh', 'buổi sáng', 'hoàng hôn', 'buổi tối'][previewIdx]}` : 'Ánh sáng theo giờ Việt Nam thực tế'); };
+function setGfx(k) {
+  const needReload = GFX[k].aa !== G.aa;
+  gfxKey = k; G = GFX[k]; sset('pk_gfx', k);
+  R.setShadow(G.shadow, G.pcf); resize(); document.body.classList.toggle('noblur', !G.blur);
+  $('#gfxBtn').textContent = G.icon + ' ' + G.name;
+  toast(`Đồ hoạ: ${G.name}${needReload ? ' · khử răng cưa áp dụng hết sau khi tải lại trang' : ''}`);
+}
+$('#gfxBtn').textContent = G.icon + ' ' + G.name;
+$('#gfxBtn').onclick = () => setGfx({ high: 'mid', mid: 'low', low: 'high' }[gfxKey]);
 $('#roomBtn').onclick = () => $('#roomList').classList.toggle('hidden');
 $('#actionBtn').onclick = doInteract;
 const updSound = () => { $('#soundBtn').textContent = S.sound ? '🔔' : '🔕'; };
@@ -858,9 +878,15 @@ mm.addEventListener('pointerdown', e => { const r = mm.getBoundingClientRect(); 
 
 /* ---------------- Vòng lặp ---------------- */
 let last = performance.now();
+let lastDraw = 0;
 function frame(t) {
   requestAnimationFrame(frame);
   if (!R) return;
+  // Giới hạn FPS: không cần vẽ 120 lần/giây trên màn hình 120Hz
+  const busy = S.me && (S.me.moving || S.target || S.inMatch || S.busy);
+  const fps = !S.me ? 15 : busy ? G.fps : G.idleFps;
+  if (t - lastDraw < 1000 / fps - 2) return;
+  lastDraw = t;
   const rdt = Math.min(.5, (t - last) / 1000), dt = Math.min(.05, rdt); last = t;
   if (S.me) {
     moveMe(dt);
