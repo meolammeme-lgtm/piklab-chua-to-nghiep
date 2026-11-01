@@ -346,7 +346,7 @@ function pick(clientX, clientY) {
 /* ---------------- Va chạm & di chuyển ---------------- */
 function collide(x, y) { for (const s of L.solids) if (x + 12 > s.x && x - 12 < s.x + s.w && y + 4 > s.y && y - 8 < s.y + s.h) return true; return false; }
 const HL = L.hall;
-const HP0 = L.hp(726, 250), HP1 = L.hp(1274, 500), HP2 = L.hp(1000, 525);
+const HP0 = L.hp(726, 250), HP1 = L.hp(1274, 500), HP2 = L.hp(1000, 548);
 const groundH = (x, y) => (x > HP0.x && x < HP1.x && y > HP0.y && y < HP1.y) ? .14 * HS : (Math.abs(x - L.altar.x) < 320 * HS && y >= HP1.y && y < HP2.y ? .07 * HS : 0);
 function moveMe(dt) {
   const me = S.me; let dx = 0, dy = 0;
