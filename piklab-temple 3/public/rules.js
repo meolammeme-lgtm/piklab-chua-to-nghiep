@@ -7,7 +7,7 @@
   const REGEN_MS = 90e3;                 // tự hồi 1 sinh lực mỗi 90 giây (để không bao giờ bị kẹt)
 
   // Sinh lực tiêu hao cho mỗi hoạt động
-  const COST = { incense: 2, dig: 6, feed: 2, bell: 1, sweep: 4, fortune: 3, shout: 2, tug: 8 };
+  const COST = { incense: 2, dig: 6, feed: 2, bell: 1, sweep: 4, fortune: 3, shout: 2, tug: 8, chant: 1 };
 
   // Màu áo: 4 màu cơ bản khi tạo nhân vật, còn lại mua ở hàng Cô Sáu
   const COLORS = [
@@ -53,7 +53,28 @@
     { id: 'bundau', name: 'Bún đậu mắm tôm', icon: '🍤', price: 10, st: 60 }
   ];
   const TUG_BETS = [5, 10, 20, 50];
-  const TUG = { win: 18, ms: 12000, countdown: 3000 };   // kéo lệch 18 lần là thắng, tối đa 12 giây
+  // Thỉnh chuông: kim chạy tam giác 0→1→0 trong 1 chu kỳ; vùng chuẩn quanh 0.5
+  const BELL = { zone: .14, countdown: 700, maxMs: 20000, period: streak => Math.max(900, 1700 - streak * 160) };
+  const bellPos = (ms, period) => { const f = ((ms % period) + period) % period / period; return f < .5 ? f * 2 : 2 - f * 2; };
+  // Đệm ngồi: gõ mõ / lần tràng hạt
+  const CHANT = { mo: { every: 6, minMs: 8000, perDay: 15 }, beads: { every: 27, minMs: 10000, perDay: 8 } };
+  // Thời tiết: thành phố có thể chọn (Open-Meteo, miễn phí, không cần khoá)
+  const CITIES = [
+    { id: 'hanoi', name: 'Hà Nội', lat: 21.03, lon: 105.85 }, { id: 'hcm', name: 'TP.HCM', lat: 10.82, lon: 106.63 },
+    { id: 'danang', name: 'Đà Nẵng', lat: 16.05, lon: 108.2 }, { id: 'hue', name: 'Huế', lat: 16.46, lon: 107.59 },
+    { id: 'haiphong', name: 'Hải Phòng', lat: 20.86, lon: 106.68 }, { id: 'cantho', name: 'Cần Thơ', lat: 10.04, lon: 105.79 },
+    { id: 'dalat', name: 'Đà Lạt', lat: 11.94, lon: 108.44 }, { id: 'sapa', name: 'Sa Pa', lat: 22.34, lon: 103.84 }
+  ];
+  const WEATHER = { clear: ['☀️', 'Trời quang'], cloudy: ['⛅', 'Nhiều mây'], rain: ['🌧️', 'Mưa'], storm: ['⛈️', 'Giông'], fog: ['🌫️', 'Sương mù'], snow: ['❄️', 'Tuyết rơi'] };
+  function weatherKind(code, temp) {             // mã thời tiết WMO → loại hiển thị
+    if ([71, 73, 75, 77, 85, 86].includes(code)) return 'snow';
+    if ([95, 96, 99].includes(code)) return 'storm';
+    if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) return temp !== undefined && temp < 1.5 ? 'snow' : 'rain';
+    if (code === 45 || code === 48) return 'fog';
+    if (code === 2 || code === 3) return 'cloudy';
+    return 'clear';
+  }
+  const TUG = { win: 18, ms: 12000, countdown: 3000, minGap: 70, grace: 300 };   // minGap: tối đa ~14 lần/giây, grace: bù độ trễ mạng   // kéo lệch 18 lần là thắng, tối đa 12 giây
 
   const DEFAULT_FORTUNES = [
     'Thượng cát: Khách duyệt file ngay bản đầu, còn khen “đúng ý anh luôn em ạ”.',
@@ -93,5 +114,5 @@
     for (const w of banned || []) if (w) t = t.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => '*'.repeat(m.length));
     return t;
   }
-  return { STAMINA_MAX, REGEN_MS, COST, COLORS, HATS, HAIRS, FOODS, TUG_BETS, TUG, DEFAULT_FORTUNES, DEFAULT_BANNED, stamina, useStamina, filterText };
+  return { BELL, bellPos, CHANT, CITIES, WEATHER, weatherKind, STAMINA_MAX, REGEN_MS, COST, COLORS, HATS, HAIRS, FOODS, TUG_BETS, TUG, DEFAULT_FORTUNES, DEFAULT_BANNED, stamina, useStamina, filterText };
 });
