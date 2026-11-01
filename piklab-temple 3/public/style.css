@@ -244,3 +244,7 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5p
   .pv { width: 58px; transform: scale(.85); transform-origin: left center; }
 }
 @media (max-height: 700px) and (min-width: 761px) { .hero-list { gap: 6px; margin-top: 14px; } .intro-hero { padding-top: 24px; } .hero-mark { margin-bottom: 10px; } }
+
+/* Tắt hiệu ứng làm mờ kính (tốn GPU vì phải tính lại mỗi khung hình) ở mức Cân bằng / Tiết kiệm */
+body.noblur .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(30, 22, 14, .84); }
+body.noblur .modal-wrap { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(12, 8, 4, .66); }
