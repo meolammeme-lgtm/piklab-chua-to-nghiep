@@ -1,91 +1,126 @@
 // Bố cục khuôn viên chùa — dùng chung cho cả server (Node) và client (trình duyệt)
+// Đơn vị: px (1 px = 0.01 đơn vị 3D). 0–2040: trong chùa · 2040–3200: chợ trước cổng chùa
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.LAYOUT = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
-  const W = 2000, H = 2300;   // 0–1500: trong chùa · 1500–2300: chợ ngoài cổng chùa
+  const W = 2800, H = 3200;
+  const GATE_Y = 2040;                                   // tường ngăn chùa / chợ
 
-  // Ô đất trồng rau (4 cột x 3 hàng)
+  // Chánh điện được dựng theo toạ độ gốc (tâm x=1000) rồi phóng to s lần và dời bằng (ox, oy)
+  const HALL = { ox: -100, oy: -65, s: 1.5 };
+  const hp = (x, y) => ({ x: HALL.ox + HALL.s * x, y: HALL.oy + HALL.s * y });
+  const h0 = hp(700, 110);
+  const hall = { x: h0.x, y: h0.y, w: 600 * HALL.s, h: 380 * HALL.s };          // 950,100 · 900×570
+  const altar = Object.assign(hp(1000, 365), { radius: 210 });
+  const cushions = [[790, 330], [860, 330], [1140, 330], [1210, 330], [790, 400], [860, 400], [1140, 400], [1210, 400]]
+    .map(([x, y], i) => Object.assign({ id: i }, hp(x, y)));
+
+  // Gác chuông, am xin quẻ: mỗi nơi có sân gạch riêng nối thẳng xuống sân lớn
+  const bell = { x: 430, y: 560, radius: 175, s: 1.4 };
+  const bellYard = [260, 410, 600, 790];
+  const bowl = { x: 1400, y: 960, radius: 150, s: 1.4 };          // lư hương chung giữa sân
+  const gate = { x: 1400, y: GATE_Y - 5 };
+  const rockeries = [{ x: 1060, y: 1150 }, { x: 1740, y: 1150 }];   // bể non bộ
+  const stupas = [{ x: 1110, y: 1780 }, { x: 1690, y: 1780 }];      // tháp đá
+
+  // Vườn rau: 5 × 4 = 20 luống
+  const garden = { x: 130, y: 1230, w: 700, h: 540 };
   const plots = [];
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 4; c++) {
-      plots.push({ id: r * 4 + c, x: 200 + c * 110, y: 790 + r * 108 });
-    }
-  }
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 5; c++) plots.push({ id: r * 5 + c, x: garden.x + 95 + c * 115, y: garden.y + 90 + r * 115 });
+  const well = { x: garden.x + garden.w - 55, y: garden.y + 85 };
+  const scarecrow = { x: garden.x + garden.w - 55, y: garden.y + garden.h - 90 };
+  const hut = { x: garden.x + 90, y: garden.y - 75 };
 
+  // Nông trại + hồ sen
+  const pen = { x: 1960, y: 1180, w: 740, h: 760 };
+  const pond = { x: pen.x + 280, y: pen.y + 180, rx: 240, ry: 115 };
+  const coop = { x: pen.x + 150, y: pen.y + 660 };          // chuồng gà
+  const shed = { x: pen.x + 600, y: pen.y + 670 };          // chuồng trâu
+  const kennel = { x: pen.x + 640, y: pen.y + 180 };        // chuồng chó
+  const nest = { x: pen.x + 110, y: pen.y + 420 };          // ổ rơm của mèo
   const animals = [
-    { id: 'cat', name: 'Mèo Mướp', x: 1470, y: 1010, range: 70 },
-    { id: 'dog', name: 'Cún Vàng', x: 1730, y: 1030, range: 80 },
-    { id: 'chicken', name: 'Gà Ri', x: 1590, y: 1140, range: 60 },
-    { id: 'buffalo', name: 'Trâu Đất', x: 1790, y: 1170, range: 50 },
-    { id: 'fish', name: 'Cá Chép Hồ Sen', x: 1620, y: 830, range: 0 }
+    { id: 'cat', name: 'Mèo Mướp', x: nest.x + 40, y: nest.y + 20, range: 70 },
+    { id: 'dog', name: 'Cún Vàng', x: kennel.x - 80, y: kennel.y + 200, range: 80 },
+    { id: 'chicken', name: 'Gà Ri', x: coop.x + 130, y: coop.y - 60, range: 70 },
+    { id: 'buffalo', name: 'Trâu Đất', x: shed.x - 150, y: shed.y - 90, range: 50 },
+    { id: 'fish', name: 'Cá Chép Hồ Sen', x: pond.x, y: pond.y + 5, range: 0 }
+  ];
+
+  // ---- Khu chợ trước cổng chùa ----
+  const market = {
+    banyan: { x: 330, y: 2300, s: 1.5 },
+    hat: { x: 760, y: 2390, w: 300, h: 200, name: 'Cô Tư bán nón' },
+    cloth: { x: 1100, y: 2390, w: 300, h: 200, name: 'Cô Sáu bán áo' },
+    food: { x: 2020, y: 2370, w: 470, h: 260, name: 'Quán Ăn Vỉa Hè' },
+    barber: { x: 2420, y: 2400, w: 250, h: 180, name: 'Cắt Tóc Gốc Cây' },
+    fortune: { x: 2370, y: 560, s: 1.5, name: 'Am Xin Quẻ' },          // trong khuôn viên chùa
+    tug: { x: 640, y: 2860, w: 600, h: 220 },
+    shout: { x: 2120, y: 2895, r: 240 }
+  };
+  const fortuneYard = [2170, 410, 2580, 790];
+  const leaves = [];
+  for (let i = 0; i < 12; i++) { const a = (70 + i * 24) * Math.PI / 180, r = 175 + (i % 3) * 35; leaves.push({ id: i, x: Math.round(market.banyan.x + Math.cos(a) * r), y: Math.round(market.banyan.y + Math.sin(a) * r * .62) }); }
+
+  // Lối đi lát đá (hình chữ nhật px) – dùng cho cảnh 3D và bản đồ nhỏ
+  const paths = [
+    [1310, 690, 1490, H - 40],            // trục chính từ thềm điện tới cuối chợ
+    [800, 690, 2000, 1250],               // sân lớn trước chánh điện
+    bellYard, [600, 690, 800, 790],       // sân gác chuông + lối nối
+    fortuneYard, [2000, 690, 2170, 790],  // sân am xin quẻ + lối nối
+    [830, 1440, 1310, 1540],              // sang vườn rau
+    [1490, 1440, 1960, 1540],             // sang nông trại
+    [260, 2540, 2560, 2700]               // phố chợ
+  ];
+  const box = (o, pad = 30) => [o.x - o.w / 2 - pad, o.y - o.h / 2 - pad, o.x + o.w / 2 + pad, o.y + o.h / 2 + pad];
+  // Những vùng không mọc cỏ (ngoài lối đi)
+  const noGrass = [
+    [hall.x - 30, hall.y - 30, hall.x + hall.w + 30, hall.y + hall.h + 50],
+    [garden.x - 20, garden.y - 20, garden.x + garden.w + 20, garden.y + garden.h + 20],
+    box(market.tug, 20), [0, GATE_Y - 40, W, GATE_Y + 50],
+    box(market.hat), box(market.cloth), box(market.food), box(market.barber),
+    [hut.x - 70, hut.y - 60, hut.x + 70, hut.y + 60],
+    [coop.x - 110, coop.y - 80, coop.x + 110, coop.y + 80], [shed.x - 130, shed.y - 90, shed.x + 130, shed.y + 90]
   ];
 
   const trees = [
-    [130, 180], [560, 150], [1440, 170], [1880, 160], [120, 520], [1880, 520],
-    [640, 620], [1360, 620], [110, 1300], [300, 1350], [1560, 1400], [1890, 1395],
-    [640, 1200], [1290, 1380], [120, 900],
-    [1880, 1560], [120, 2200], [1880, 2200], [1880, 1880]
-  ].map(([x, y], i) => ({ x, y, kind: i % 3 }));
+    [150, 180], [680, 250], [2100, 230], [2680, 200], [150, 950], [2680, 980], [620, 1060], [2160, 1060],
+    [1225, 1330], [1575, 1330], [1225, 1660], [1575, 1660], [1225, 1930], [1575, 1930], [1000, 1995], [1800, 1995], [2660, 1990],
+    [2520, 460],                                           // cây bồ đề cạnh am xin quẻ
+    [150, 2650], [2680, 2300], [150, 3100], [2680, 3100], [1050, 3100], [1750, 3100], [2680, 2700]
+  ].map(([x, y], i) => ({ x, y, kind: i === 17 ? 0 : i % 3 }));
 
-  const lanterns = [];
-  for (let y = 820; y <= 1320; y += 125) { lanterns.push({ x: 835, y }); lanterns.push({ x: 1165, y }); }
-  for (const y of [1590, 1710, 2010, 2130]) { lanterns.push({ x: 875, y }); lanterns.push({ x: 1125, y }); }
-
-  // ---- Khu chợ ngoài cổng chùa ----
-  const market = {
-    banyan: { x: 380, y: 1640 },                                       // cây đa đầu chợ – khu quét lá
-    hat: { x: 560, y: 1790, name: 'Cô Tư bán nón' },                   // hàng rong ngồi quay mặt ra đường
-    cloth: { x: 740, y: 1790, name: 'Cô Sáu bán áo' },
-    food: { x: 1300, y: 1775, name: 'Quán Ăn Vỉa Hè' },
-    barber: { x: 1500, y: 1790, name: 'Cắt Tóc Vỉa Hè' },
-    fortune: { x: 1650, y: 1590, name: 'Am Gieo Quẻ' },
-    tug: { x: 450, y: 2080, w: 520, h: 190 },                          // sân kéo co
-    shout: { x: 1560, y: 2090, r: 210 }                                // bãi khẩu nghiệp
-  };
-  const leaves = [];                                                   // các ụ lá đa quanh gốc cây
-  // vòng cung quanh gốc đa, chừa phía đông-nam (gần gánh hàng rong) để không bấm nhầm
-  for (let i = 0; i < 12; i++) { const a = (100 + i * 25) * Math.PI / 180, r = 185 + (i % 3) * 38; leaves.push({ id: i, x: Math.round(380 + Math.cos(a) * r), y: Math.round(1640 + Math.sin(a) * r * .6) }); }
-
-  // Vật cản (hình chữ nhật)
+  const hs = (x, y, w, h) => { const a = hp(x, y); return { x: a.x, y: a.y, w: w * HALL.s, h: h * HALL.s }; };
   const solids = [
-    { x: 700, y: 110, w: 600, h: 140 },   // tường sau chánh điện
-    { x: 700, y: 110, w: 26, h: 380 },    // vách trái
-    { x: 1274, y: 110, w: 26, h: 380 },   // vách phải
-    { x: 760, y: 250, w: 480, h: 66 },    // bàn thờ
-    { x: 268, y: 300, w: 124, h: 64 },    // chân gác chuông
-    { x: 1470, y: 770, w: 300, h: 110 },  // hồ sen
-    { x: 970, y: 615, w: 60, h: 45 },     // lư hương lớn
-    { x: 0, y: 0, w: W, h: 60 },          // tường bao
-    { x: 0, y: H - 60, w: W, h: 60 },
-    { x: 0, y: 1445, w: 925, h: 50 },     // tường ngăn chùa / chợ (chừa lối qua tam quan)
-    { x: 1075, y: 1445, w: 925, h: 50 },
-    { x: 345, y: 1622, w: 70, h: 40 },    // gốc đa
-    { x: 520, y: 1765, w: 80, h: 36 },    // gánh nón
-    { x: 700, y: 1765, w: 80, h: 36 },    // gánh áo
-    { x: 1220, y: 1745, w: 160, h: 46 },  // bàn quán ăn
-    { x: 1470, y: 1765, w: 64, h: 34 },   // ghế cắt tóc
-    { x: 1600, y: 1555, w: 100, h: 66 },  // am gieo quẻ
-    { x: 1550, y: 2080, w: 20, h: 14 },   // cột loa phường
-    { x: 0, y: 0, w: 50, h: H },
-    { x: W - 50, y: 0, w: 50, h: H }
+    hs(700, 110, 600, 140),                                // tường sau chánh điện
+    hs(700, 110, 26, 380), hs(1274, 110, 26, 380),
+    hs(760, 250, 480, 70),                                 // bàn thờ
+    { x: bell.x - 90, y: bell.y - 45, w: 180, h: 90 },
+    { x: market.fortune.x - 75, y: market.fortune.y - 55, w: 150, h: 95 },
+    { x: pond.x - 205, y: pond.y - 75, w: 410, h: 150 },
+    { x: bowl.x - 45, y: bowl.y - 50, w: 90, h: 65 },
+    ...rockeries.map(o => ({ x: o.x - 50, y: o.y - 35, w: 100, h: 60 })),
+    ...stupas.map(o => ({ x: o.x - 32, y: o.y - 22, w: 64, h: 40 })),
+    { x: well.x - 30, y: well.y - 25, w: 60, h: 45 },
+    { x: hut.x - 55, y: hut.y - 40, w: 110, h: 70 },
+    { x: coop.x - 80, y: coop.y - 50, w: 160, h: 80 }, { x: shed.x - 110, y: shed.y - 55, w: 220, h: 90 }, { x: kennel.x - 45, y: kennel.y - 35, w: 90, h: 60 },
+    { x: 0, y: 0, w: W, h: 60 }, { x: 0, y: H - 60, w: W, h: 60 },
+    { x: 0, y: 0, w: 50, h: H }, { x: W - 50, y: 0, w: 50, h: H },
+    { x: 0, y: GATE_Y, w: gate.x - 75, h: 50 }, { x: gate.x + 75, y: GATE_Y, w: W - gate.x - 75, h: 50 },
+    { x: market.banyan.x - 55, y: market.banyan.y - 30, w: 110, h: 60 },
+    { x: market.hat.x - 130, y: market.hat.y - 80, w: 260, h: 110 },
+    { x: market.cloth.x - 130, y: market.cloth.y - 80, w: 260, h: 110 },
+    { x: market.food.x - 210, y: market.food.y - 110, w: 220, h: 70 },
+    { x: market.barber.x - 110, y: market.barber.y - 60, w: 60, h: 50 },
+    { x: market.shout.x - 110, y: market.shout.y + 120, w: 220, h: 80 }      // sân khấu nhỏ
   ];
   trees.forEach(t => solids.push({ x: t.x - 16, y: t.y - 6, w: 32, h: 20 }));
 
   return {
-    W, H,
-    spawn: { x: 1000, y: 2110 },
-    hall: { x: 700, y: 110, w: 600, h: 380 },
-    altar: { x: 1000, y: 365, radius: 120 },
-    bowl: { x: 1000, y: 650, radius: 110 },
-    bell: { x: 330, y: 330, radius: 120 },
-    garden: { x: 140, y: 730, w: 450, h: 340 },
-    pen: { x: 1400, y: 700, w: 520, h: 600 },
-    pond: { x: 1620, y: 825, rx: 175, ry: 85 },
-    gate: { x: 1000, y: 1440 },
-    plots, animals, trees, lanterns, solids, market, leaves, leafRadius: 75,
-    plotRadius: 70,
-    animalRadius: 130,
-    fishRadius: 230
+    W, H, GATE_Y, HALL, hp,
+    spawn: { x: 1400, y: 3050 },
+    hall, altar, bowl, bell, bellYard, garden, pen, pond, gate, cushions, rockeries, stupas, well, scarecrow, hut, coop, shed, kennel, nest, fortuneYard,
+    plots, animals, trees, lanterns: [], solids, market, leaves, paths, noGrass,
+    leafRadius: 75, plotRadius: 70, animalRadius: 130, fishRadius: 270, cushionRadius: 60
   };
 });
