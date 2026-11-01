@@ -132,8 +132,8 @@ class Geo {
 }
 
 /* ---------- Renderer ---------- */
-function createRenderer(canvas) {
-  const gl = canvas.getContext('webgl2', { antialias: true, alpha: true, premultipliedAlpha: false });
+function createRenderer(canvas, opts = {}) {
+  const gl = canvas.getContext('webgl2', { antialias: opts.antialias !== false, alpha: true, premultipliedAlpha: false, powerPreference: opts.power || 'default' });
   if (!gl) return null;
   const sh = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
   const prog = (vs, fs) => { const p = gl.createProgram(); gl.attachShader(p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; };
@@ -145,13 +145,14 @@ function createRenderer(canvas) {
   const FS = `#version 300 es
   precision highp float; precision highp sampler2DShadow;
   in vec3 vW; in vec3 vN; in vec3 vC; in vec2 vU; in vec4 vL;
-  uniform sampler2DShadow uSh; uniform sampler2D uTex; uniform int uUseTex;
+  uniform sampler2DShadow uSh; uniform sampler2D uTex; uniform int uUseTex; uniform int uPcf;
   uniform vec3 uSun, uSunC, uSky, uGnd, uCam; uniform float uEm, uAlpha, uExp, uSat, uGlow;
   out vec4 o;
   float shadow(){ vec3 p=vL.xyz/vL.w*.5+.5; if(p.x<0.||p.x>1.||p.y<0.||p.y>1.||p.z>1.) return 1.;
     vec2 t=1./vec2(textureSize(uSh,0)); float s=0.;
-    for(int x=-2;x<=2;x++) for(int y=-2;y<=2;y++) s+=texture(uSh, vec3(p.xy+vec2(x,y)*t*1.2, p.z-.0012));
-    return s/25.; }
+    if(uPcf==0) return texture(uSh, vec3(p.xy, p.z-.0012));      // 1 mẫu (GPU tự lọc 2x2)
+    for(int x=-1;x<=1;x++) for(int y=-1;y<=1;y++) s+=texture(uSh, vec3(p.xy+vec2(x,y)*t*1.5, p.z-.0012));
+    return s/9.; }
   void main(){
     vec3 n=normalize(vN); vec3 base=vC; float a=uAlpha;
     if(uUseTex==1){ vec4 t=texture(uTex,vU); if(t.a<.5) discard; base=pow(t.rgb, vec3(2.2)); }
@@ -170,11 +171,11 @@ function createRenderer(canvas) {
   const SFS = `#version 300 es
   precision mediump float; out vec4 o; void main(){ o=vec4(1.); }`;
   const main = prog(VS, FS), shp = prog(SVS, SFS);
-  const U = {}; ['uM', 'uVP', 'uLVP', 'uNM', 'uTint', 'uSh', 'uTex', 'uUseTex', 'uSun', 'uSunC', 'uSky', 'uGnd', 'uCam', 'uEm', 'uAlpha', 'uExp', 'uSat', 'uGlow'].forEach(n => U[n] = gl.getUniformLocation(main, n));
+  const U = {}; ['uM', 'uVP', 'uLVP', 'uNM', 'uTint', 'uSh', 'uTex', 'uUseTex', 'uSun', 'uSunC', 'uSky', 'uGnd', 'uCam', 'uEm', 'uAlpha', 'uExp', 'uSat', 'uGlow', 'uPcf'].forEach(n => U[n] = gl.getUniformLocation(main, n));
   const SU = { uM: gl.getUniformLocation(shp, 'uM'), uLVP: gl.getUniformLocation(shp, 'uLVP') };
 
   // shadow map
-  const SM = 2048;
+  let SM = opts.shadow || 1024, pcf = opts.pcf === undefined ? 1 : opts.pcf;
   const depth = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, depth);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SM, SM, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -185,6 +186,12 @@ function createRenderer(canvas) {
   const dummy = gl.createRenderbuffer(); gl.bindRenderbuffer(gl.RENDERBUFFER, dummy); gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA8, SM, SM);
   gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, dummy);
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  function setShadow(size, p) {           // đổi độ phân giải bóng / số mẫu lọc khi chỉnh chất lượng
+    if (p !== undefined) pcf = p;
+    if (!size || size === SM) return; SM = size;
+    gl.bindTexture(gl.TEXTURE_2D, depth); gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SM, SM, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+    gl.bindRenderbuffer(gl.RENDERBUFFER, dummy); gl.renderbufferStorage(gl.RENDERBUFFER, gl.RGBA8, SM, SM);
+  }
   const white = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, white); gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([255, 255, 255, 0]));
 
   function mesh(geo) {
@@ -223,7 +230,7 @@ function createRenderer(canvas) {
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(main);
     gl.uniformMatrix4fv(U.uVP, false, cam.vp); gl.uniformMatrix4fv(U.uLVP, false, LVP);
-    gl.uniform3fv(U.uSun, env.sun); gl.uniform3fv(U.uSunC, env.sunC); gl.uniform3fv(U.uSky, env.sky); gl.uniform3fv(U.uGnd, env.gnd); gl.uniform3fv(U.uCam, cam.eye); gl.uniform1f(U.uExp, env.exp); gl.uniform1f(U.uSat, env.sat); gl.uniform1f(U.uGlow, env.glow);
+    gl.uniform3fv(U.uSun, env.sun); gl.uniform3fv(U.uSunC, env.sunC); gl.uniform3fv(U.uSky, env.sky); gl.uniform3fv(U.uGnd, env.gnd); gl.uniform3fv(U.uCam, cam.eye); gl.uniform1f(U.uExp, env.exp); gl.uniform1f(U.uSat, env.sat); gl.uniform1f(U.uGlow, env.glow); gl.uniform1i(U.uPcf, pcf);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, depth); gl.uniform1i(U.uSh, 0);
     gl.uniform1i(U.uTex, 1);
     const draw = it => {
@@ -243,7 +250,7 @@ function createRenderer(canvas) {
     gl.bindVertexArray(null);
   }
   const I = M4.ident(), I3 = [1, 0, 0, 0, 1, 0, 0, 0, 1], ONE = [1, 1, 1];
-  return { gl, mesh, texture, render, env };
+  return { gl, mesh, texture, render, env, setShadow };
 }
 
 window.ENGINE = { M4, P, Geo, col, createRenderer, norm, cross, dot };
