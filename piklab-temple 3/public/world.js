@@ -126,7 +126,9 @@ function build(R, L) {
   Wh.add(rb(1.3, .02, 2.6, .005), '#c0262a', T(10, .14, 3.55)); // thảm đỏ: 3 lớp xếp bậc, mỗi lớp cao hơn 5mm
   Wh.add(rb(1.1, .02, 2.5, .005), '#e4ad46', T(10, .145, 3.55));
   Wh.add(rb(1.0, .02, 2.4, .005), '#c0262a', T(10, .15, 3.55));
-  for (let i = 0; i < 2; i++) Wh.add(rb(6.4 - i * .1, .1, .32, .04), PAL.stone, T(10, .03 + i * .06, 5.1 + i * .02 - i * .2)); // bậc thềm
+  // bậc thềm: đặt hẳn ra trước mép nền (z > 5.0), mỗi bậc thấp hơn bậc trên — không mặt nào trùng nhau để khỏi nháy
+  Wh.add(rb(6.4, .11, .24, .03), PAL.stone, T(10, .055, 5.12));
+  Wh.add(rb(6.5, .06, .24, .02), PAL.stone2, T(10, .03, 5.36));
   Wh.add(rb(6.0, 2.85, .3, .06), PAL.wall, T(10, 1.42, 1.25));
   Wh.add(rb(.28, 2.6, 3.7, .06), PAL.wall, T(7.14, 1.3, 2.95));
   Wh.add(rb(.28, 2.6, 3.7, .06), PAL.wall, T(12.86, 1.3, 2.95));
