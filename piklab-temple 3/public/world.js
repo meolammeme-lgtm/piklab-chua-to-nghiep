@@ -13,7 +13,7 @@ function rng(seed) { return () => { seed = (seed * 16807) % 2147483647; return (
 
 const PAL = {
   grass: '#8aa66a', grass2: '#97b277', grass3: '#7a9a5e', soilSide: '#9a7052', soilDeep: '#6f5040',
-  tileA: '#b9765c', tileB: '#a96a51', tileC: '#c98b6f', tileHA: '#9c5640', tileHB: '#8d4c38',
+  tileA: '#968d80', tileB: '#918878', tileC: '#9c9386', tileHA: '#6f4b3e', tileHB: '#6a473a',
   wall: '#e8d2a0', cap: '#7f4a3c', red: '#8e2f24', redDk: '#62261d', gold: '#c9a862', wood: '#a88262', woodDk: '#6e5340',
   roof: '#8a5242', roofDk: '#6a3e33', jade: '#5c9a88', stone: '#d6cdbb', stone2: '#b4aa98', bronze: '#a88449', water: '#6fa8b4',
   leaf: '#6a9a54', leaf2: '#7fa865', leaf3: '#5a8649', pink: '#e7b7c4', pink2: '#f0cfd8', pink3: '#d99fb1', cream: '#f6ecd9', skin: '#f0c9a3', hair: '#3a2a20'
@@ -72,30 +72,38 @@ function build(R, L) {
   const items = [], texItems = [];
   const r = rng(7);
   const k = .01; // px -> đơn vị 3D
+  const addTex = (cv, w, h, m, em = .35, frame) => { const tex = R.texture(cv); if (frame) world.add(frame[0], frame[1], frame[2]); texItems.push({ mesh: R.mesh(new Geo().add(P.quad(w, h), '#ffffff')), m, tex, em }); };
+  // nhóm dựng ở toạ độ cục bộ rồi phóng to s lần, đặt tại (x, z)
+  const grp = (g, x, z, s = 1, y = 0, ry = 0) => { const M = M4.trs(x, y, z, ry, s, s, s); return { add: (pr, c, m) => g.add(pr, c, M4.mul(M, m || M4.ident())) }; };
 
   // nền diorama nhiều lớp
-  const D = L.H * k, DZ = D / 2;   // chiều sâu bản đồ (gồm cả khu chợ ngoài cổng)
-  world.add(rb(20.6, .5, D + .6, .22, 3), PAL.grass, T(10, -.25, DZ));
-  world.add(rb(20.3, 1.1, D + .3, .3, 3), PAL.soilSide, T(10, -.95, DZ));
-  world.add(rb(19.8, .6, D - .2, .25, 2), PAL.soilDeep, T(10, -1.55, DZ));
-  // (đã bỏ các vòng cỏ tròn sát mặt đất vì gây nhấp nháy khi di chuyển)
+  const D = L.H * k, DZ = D / 2, WW = L.W * k, WX = WW / 2;
+  world.add(rb(WW + .6, .5, D + .6, .22, 3), PAL.grass, T(WX, -.25, DZ));
+  world.add(rb(WW + .3, 1.1, D + .3, .3, 3), PAL.soilSide, T(WX, -.95, DZ));
+  world.add(rb(WW - .2, .6, D - .2, .25, 2), PAL.soilDeep, T(WX, -1.55, DZ));
 
-  // lát gạch (lưới 0.5)
-  const rects = [[8, 4.95, 12, 14.4], [7.6, 5.25, 12.4, 7.9], [3.5, 5.4, 7.6, 6.1], [2.98, 3.7, 3.62, 7.3], [5.9, 8.75, 8, 9.5], [12, 8.75, 14, 9.5], [9.0, 14.4, 11.0, 22.3], [4.6, 18.4, 17.3, 19.4], [15.9, 16.0, 16.9, 18.4]];
-  const tile = rb(.46, .08, .46, .03, 1), cells = new Set();
-  for (const [x0, z0, x1, z1] of rects) for (let x = Math.floor(x0 * 2) / 2; x < x1; x += .5) for (let z = Math.floor(z0 * 2) / 2; z < z1; z += .5) {
-    const cx = x + .25, cz = z + .25; if (cx < x0 || cx > x1 || cz < z0 || cz > z1) continue;
-    const key = cx + ',' + cz; if (cells.has(key)) continue; cells.add(key);
-    const chk = (Math.round(cx * 2) + Math.round(cz * 2)) % 2;
-    world.add(tile, r() < .08 ? PAL.tileC : chk ? PAL.tileA : PAL.tileB, T(cx, .03, cz, (r() - .5) * .03));
+  // lát đá liền mạch (lưới 0.5, các viên sát nhau, tông xám nâu trầm)
+  const tile = rb(.5, .06, .5, .006, 1), cells = new Set();
+  for (const [px0, pz0, px1, pz1] of L.paths) {
+    const x0 = px0 * k, z0 = pz0 * k, x1 = px1 * k, z1 = pz1 * k;
+    for (let x = Math.floor(x0 * 2) / 2; x < x1; x += .5) for (let z = Math.floor(z0 * 2) / 2; z < z1; z += .5) {
+      const cx = x + .25, cz = z + .25; if (cx < x0 || cx > x1 || cz < z0 || cz > z1) continue;
+      const key = cx + ',' + cz; if (cells.has(key)) continue; cells.add(key);
+      const chk = (Math.round(cx * 2) + Math.round(cz * 2)) % 2;
+      world.add(tile, r() < .06 ? PAL.tileC : chk ? PAL.tileA : PAL.tileB, T(cx, .03, cz));
+    }
   }
-  // cỏ lá
+  // cỏ lá (không mọc trên lối đi và các khu đã định)
   const blade = C('blade', () => P.cyl(0, .035, .22, 5));
   const onPath = (x, z) => cells.has((Math.floor(x * 2) / 2 + .25) + ',' + (Math.floor(z * 2) / 2 + .25));
-  for (let i = 0; i < 420; i++) {
-    const x = .7 + r() * 18.6, z = .7 + r() * (D - 1.4);
-    if (onPath(x, z) || (x > 6.8 && x < 13.2 && z < 5.2) || (x > 1.3 && x < 6 && z > 7.2 && z < 10.8) || (Math.hypot((x - 16.2) / 1.9, (z - 8.25) / 1) < 1)) continue;
-    if (Math.abs(z - 14.7) < .45 || (Math.abs(x - 4.5) < 2.9 && Math.abs(z - 20.8) < 1.2) || Math.hypot(x - 15.6, z - 20.9) < 2.2 || (z > 17.3 && z < 18.4 && x > 4.9 && x < 15.4)) continue;
+  const blocked = (x, z) => { const X = x / k, Z = z / k;
+    if (L.noGrass.some(([a, b, c, d]) => X > a && X < c && Z > b && Z < d)) return true;
+    if (Math.hypot((X - L.pond.x) / (L.pond.rx + 40), (Z - L.pond.y) / (L.pond.ry + 30)) < 1) return true;
+    return Math.hypot(X - L.market.shout.x, Z - L.market.shout.y) < L.market.shout.r + 20; };
+  const nBlades = Math.round(420 * (WW * D) / (20 * 23));
+  for (let i = 0; i < nBlades; i++) {
+    const x = .7 + r() * (WW - 1.4), z = .7 + r() * (D - 1.4);
+    if (onPath(x, z) || blocked(x, z)) continue;
     const c = r() > .5 ? PAL.leaf2 : PAL.grass3;
     for (let j = 0; j < 3; j++) world.add(blade, c, T(x + (j - 1) * .05, 0, z + (r() - .5) * .06, 0, 1, .7 + r() * .6, 1, (j - 1) * .35, (r() - .5) * .3));
     if (r() < .12) world.add(sp(.05, 6), ['#fff4c2', '#ffb3c9', '#ffffff'][(r() * 3) | 0], T(x, .2, z));
@@ -103,29 +111,33 @@ function build(R, L) {
 
   // tường bao
   const wallSeg = (x, z, w, d, h) => { world.add(rb(w, h, d, .08), PAL.wall, T(x, h / 2, z)); world.add(rb(w + .14, .14, d + .14, .05), PAL.cap, T(x, h + .05, z)); };
-  wallSeg(10, .32, 19.6, .44, 1.0); wallSeg(.32, DZ, .44, D - .8, .8); wallSeg(19.68, DZ, .44, D - .8, .8);
-  wallSeg(4.4, 14.68, 8.2, .4, .55); wallSeg(15.6, 14.68, 8.2, .4, .55);
-  wallSeg(4.45, D - .32, 8.3, .4, .5); wallSeg(15.55, D - .32, 8.3, .4, .5);   // tường chợ, chừa lối vào
-  for (const [x, z, h] of [[.32, .32, 1.25], [19.68, .32, 1.25], [.32, 14.68, 1.0], [19.68, 14.68, 1.0], [.32, 7.5, 1.05], [19.68, 7.5, 1.05], [.32, D - .32, .9], [19.68, D - .32, .9], [8.6, D - .32, 1.4], [11.4, D - .32, 1.4]]) { world.add(rb(.62, h, .62, .1), PAL.wall, T(x, h / 2, z)); world.add(rb(.74, .14, .74, .06), PAL.cap, T(x, h + .06, z)); world.add(sp(.12), PAL.gold, T(x, h + .2, z)); }
+  const GZ = L.GATE_Y * k + .25, GX = L.gate.x * k;
+  wallSeg(WX, .32, WW - .4, .44, 1.0); wallSeg(.32, DZ, .44, D - .8, .8); wallSeg(WW - .32, DZ, .44, D - .8, .8);
+  wallSeg((GX - .75) / 2 + .1, GZ, GX - .95, .4, .55); wallSeg((GX + .75 + WW - .2) / 2, GZ, WW - GX - .95, .4, .55);
+  wallSeg((GX - 1.4) / 2 + .1, D - .32, GX - 1.6, .4, .5); wallSeg((GX + 1.4 + WW - .2) / 2, D - .32, WW - GX - 1.6, .4, .5);   // tường chợ, chừa lối vào
+  for (const [x, z, h] of [[.32, .32, 1.25], [WW - .32, .32, 1.25], [.32, GZ, 1.0], [WW - .32, GZ, 1.0], [.32, D - .32, .9], [WW - .32, D - .32, .9], [GX - 1.4, D - .32, 1.4], [GX + 1.4, D - .32, 1.4]]) { world.add(rb(.62, h, .62, .1), PAL.wall, T(x, h / 2, z)); world.add(rb(.74, .14, .74, .06), PAL.cap, T(x, h + .06, z)); world.add(sp(.12), PAL.gold, T(x, h + .2, z)); }
 
-  /* ---- Chánh điện ---- */
-  world.add(rb(6.3, .26, 4.0, .08), '#a14a33', T(10, .0, 3.0));
-  for (let x = 7.25; x < 12.75; x += .5) for (let z = 1.45; z < 4.95; z += .5) world.add(tile, ((x * 2 + z * 2) | 0) % 2 ? PAL.tileHA : PAL.tileHB, T(x + .25, .1, z + .25));
-  world.add(rb(1.3, .03, 2.6, .01), '#c0262a', T(10, .145, 3.55)); // thảm đỏ
-  world.add(rb(1.1, .035, 2.5, .01), '#e4ad46', T(10, .14, 3.55));
-  world.add(rb(1.0, .04, 2.4, .01), '#c0262a', T(10, .145, 3.55));
-  for (let i = 0; i < 2; i++) world.add(rb(6.4 - i * .1, .1, .32, .04), PAL.stone, T(10, .03 + i * .06, 5.1 + i * .02 - i * .2)); // bậc thềm
-  world.add(rb(6.0, 2.85, .3, .06), PAL.wall, T(10, 1.42, 1.25));
-  world.add(rb(.28, 2.6, 3.7, .06), PAL.wall, T(7.14, 1.3, 2.95));
-  world.add(rb(.28, 2.6, 3.7, .06), PAL.wall, T(12.86, 1.3, 2.95));
+  /* ---- Chánh điện (dựng ở toạ độ gốc, phóng to L.HALL.s lần rồi dời) ---- */
+  const HS = L.HALL.s, HM = M4.trs(L.HALL.ox * k, 0, L.HALL.oy * k, 0, HS, HS, HS);
+  const shiftG = g => ({ add: (pr, c, m) => g.add(pr, c, M4.mul(HM, m || M4.ident())) });
+  const Wh = shiftG(world), Rh = shiftG(roof), Gh = shiftG(glow);
+  Wh.add(rb(6.3, .26, 4.0, .08), '#a14a33', T(10, .0, 3.0));
+  for (let x = 7.25; x < 12.75; x += .5) for (let z = 1.45; z < 4.95; z += .5) Wh.add(tile, ((x * 2 + z * 2) | 0) % 2 ? PAL.tileHA : PAL.tileHB, T(x + .25, .11, z + .25));   // mặt gạch .14 — cao hơn mặt nền .13 để không nháy (z-fighting)
+  Wh.add(rb(1.3, .02, 2.6, .005), '#c0262a', T(10, .14, 3.55)); // thảm đỏ: 3 lớp xếp bậc, mỗi lớp cao hơn 5mm
+  Wh.add(rb(1.1, .02, 2.5, .005), '#e4ad46', T(10, .145, 3.55));
+  Wh.add(rb(1.0, .02, 2.4, .005), '#c0262a', T(10, .15, 3.55));
+  for (let i = 0; i < 2; i++) Wh.add(rb(6.4 - i * .1, .1, .32, .04), PAL.stone, T(10, .03 + i * .06, 5.1 + i * .02 - i * .2)); // bậc thềm
+  Wh.add(rb(6.0, 2.85, .3, .06), PAL.wall, T(10, 1.42, 1.25));
+  Wh.add(rb(.28, 2.6, 3.7, .06), PAL.wall, T(7.14, 1.3, 2.95));
+  Wh.add(rb(.28, 2.6, 3.7, .06), PAL.wall, T(12.86, 1.3, 2.95));
   for (const x of [7.4, 8.6, 11.4, 12.6]) {
-    world.add(rb(.36, .14, .36, .05), PAL.stone, T(x, .17, 4.8));
-    world.add(cy(.12, .13, 2.45, 14), PAL.red, T(x, .2, 4.8));
-    world.add(cy(.15, .15, .1, 14), PAL.gold, T(x, 2.5, 4.8));
-    world.add(cy(.135, .135, .06, 14), PAL.gold, T(x, .25, 4.8));
+    Wh.add(rb(.36, .14, .36, .05), PAL.stone, T(x, .17, 4.8));
+    Wh.add(cy(.12, .13, 2.45, 14), PAL.red, T(x, .2, 4.8));
+    Wh.add(cy(.15, .15, .1, 14), PAL.gold, T(x, 2.5, 4.8));
+    Wh.add(cy(.135, .135, .06, 14), PAL.gold, T(x, .25, 4.8));
   }
-  roof.add(rb(6.3, .24, .26, .05), PAL.redDk, T(10, 2.62, 4.8));
-  roof.add(rb(6.32, .05, .28, .02), PAL.gold, T(10, 2.5, 4.8));
+  Rh.add(rb(6.3, .24, .26, .05), PAL.redDk, T(10, 2.62, 4.8));
+  Rh.add(rb(6.32, .05, .28, .02), PAL.gold, T(10, 2.5, 4.8));
   // hàng ngói ống trên mặt mái
   const rods = (gg, cx, y0, zc, wb, db, wt, dt, h, dzTop = 0, step = .26, col = PAL.roofDk) => {
     for (const side of [1, -1]) for (let x = -wb / 2 + step / 2; x < wb / 2; x += step) {
@@ -136,74 +148,84 @@ function build(R, L) {
     }
   };
   // mái 2 tầng (nhóm trong suốt được)
-  const horn = (x, y, z, dir, s = 1, gg = roof) => { for (let i = 0; i < 5; i++) gg.add(sp(.1 * s * (1 - i * .1), 8), i === 4 ? PAL.gold : PAL.roofDk, T(x + dir[0] * i * .09 * s, y + i * i * .03 * s, z + dir[1] * i * .09 * s)); };
-  roof.add(P.frustum(7.2, 5.0, 5.2, 2.3, .95, -.05), PAL.roof, T(10, 2.74, 3.0)); rods(roof, 10, 2.74, 3.0, 7.2, 5.0, 5.2, 2.3, .95, -.05);
-  roof.add(rb(7.3, .1, 5.1, .05), PAL.roofDk, T(10, 2.74, 3.0));
-  roof.add(rb(7.34, .05, 5.14, .02), PAL.gold, T(10, 2.8, 3.0));
+  const horn = (x, y, z, dir, s = 1, gg = Rh) => { for (let i = 0; i < 5; i++) gg.add(sp(.1 * s * (1 - i * .1), 8), i === 4 ? PAL.gold : PAL.roofDk, T(x + dir[0] * i * .09 * s, y + i * i * .03 * s, z + dir[1] * i * .09 * s)); };
+  Rh.add(P.frustum(7.2, 5.0, 5.2, 2.3, .95, -.05), PAL.roof, T(10, 2.74, 3.0)); rods(Rh, 10, 2.74, 3.0, 7.2, 5.0, 5.2, 2.3, .95, -.05);
+  Rh.add(rb(7.3, .1, 5.1, .05), PAL.roofDk, T(10, 2.74, 3.0));
+  Rh.add(rb(7.34, .05, 5.14, .02), PAL.gold, T(10, 2.8, 3.0));
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(10 + sx * 3.6, 2.8, 3 + sz * 2.5, [sx * .7, sz * .7], 1.3);
-  roof.add(rb(4.6, .4, 1.8, .06), PAL.wall, T(10, 3.85, 2.95));
-  roof.add(P.frustum(5.8, 2.8, 3.8, .5, .78), PAL.roof, T(10, 4.0, 2.95)); rods(roof, 10, 4.0, 2.95, 5.8, 2.8, 3.8, .5, .78, 0, .28);
-  roof.add(rb(5.9, .08, 2.9, .04), PAL.gold, T(10, 4.02, 2.95));
+  Rh.add(rb(4.6, .4, 1.8, .06), PAL.wall, T(10, 3.85, 2.95));
+  Rh.add(P.frustum(5.8, 2.8, 3.8, .5, .78), PAL.roof, T(10, 4.0, 2.95)); rods(Rh, 10, 4.0, 2.95, 5.8, 2.8, 3.8, .5, .78, 0, .28);
+  Rh.add(rb(5.9, .08, 2.9, .04), PAL.gold, T(10, 4.02, 2.95));
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(10 + sx * 2.9, 4.05, 2.95 + sz * 1.4, [sx * .7, sz * .7], 1);
-  roof.add(rb(4.2, .22, .32, .08), PAL.roofDk, T(10, 4.86, 2.95));
-  roof.add(rb(4.22, .05, .34, .02), PAL.gold, T(10, 4.98, 2.95));
-  roof.add(sp(.2, 14), PAL.gold, T(10, 5.25, 2.95)); roof.add(cy(0, .12, .25, 10), PAL.gold, T(10, 5.38, 2.95));
+  Rh.add(rb(4.2, .22, .32, .08), PAL.roofDk, T(10, 4.86, 2.95));
+  Rh.add(rb(4.22, .05, .34, .02), PAL.gold, T(10, 4.98, 2.95));
+  Rh.add(sp(.2, 14), PAL.gold, T(10, 5.25, 2.95)); Rh.add(cy(0, .12, .25, 10), PAL.gold, T(10, 5.38, 2.95));
   for (const s of [-1, 1]) { // rồng cách điệu
-    for (let i = 0; i < 9; i++) { const t = i / 8; roof.add(sp(.11 - t * .03, 8), PAL.jade, T(10 + s * (1.9 - t * 1.4), 5.05 + Math.sin(t * Math.PI * 1.5) * .22, 2.95)); }
-    roof.add(sp(.14, 10), PAL.jade, T(10 + s * .45, 5.2, 2.95)); roof.add(cy(0, .05, .2, 6), PAL.gold, T(10 + s * .45, 5.3, 2.95, 0, 1, 1, 1, 0, s * .5));
+    for (let i = 0; i < 9; i++) { const t = i / 8; Rh.add(sp(.11 - t * .03, 8), PAL.jade, T(10 + s * (1.9 - t * 1.4), 5.05 + Math.sin(t * Math.PI * 1.5) * .22, 2.95)); }
+    Rh.add(sp(.14, 10), PAL.jade, T(10 + s * .45, 5.2, 2.95)); Rh.add(cy(0, .05, .2, 6), PAL.gold, T(10 + s * .45, 5.3, 2.95, 0, 1, 1, 1, 0, s * .5));
   }
   // ban thờ
-  world.add(rb(4.4, .95, .72, .06), PAL.redDk, T(10, .6, 1.95));
-  world.add(rb(4.46, .07, .78, .03), PAL.gold, T(10, 1.08, 1.95));
-  for (let i = 0; i < 4; i++) { world.add(rb(.9, .26, .04, .04), '#9a3423', T(8.6 + i * .93, .5, 2.32)); world.add(rb(.12, .04, .04, .02), PAL.gold, T(8.6 + i * .93, .5, 2.35)); }
-  world.add(rb(4.4, .08, .06, .02), PAL.gold, T(10, .3, 2.32));
-  world.add(rb(4.3, 1.48, .44, .05), '#8f2a1c', T(10, .87, 1.5));
-  world.add(rb(4.34, .06, .48, .02), PAL.gold, T(10, 1.61, 1.5));
-  for (const x of [8.05, 11.95]) { world.add(cy(.07, .07, .4, 12), PAL.cream, T(x, 1.11, 2.05)); world.add(cy(.1, .12, .06, 12), PAL.gold, T(x, 1.11, 2.05)); glow.add(sp(.06, 8), '#ffcf5a', T(x, 1.58, 2.05, 0, 1, 1.7, 1)); }
-  const plate = (x, fruits) => { world.add(cy(.26, .12, .08, 16), PAL.gold, T(x, 1.11, 2.0)); fruits.forEach(([dx, dy, dz, s, c]) => world.add(sp(s, 10), c, T(x + dx, 1.25 + dy, 2.0 + dz))); };
-  plate(8.85, [[-.1, 0, 0, .1, '#f39a2b'], [.1, 0, .02, .1, '#f2c14e'], [0, 0, -.1, .1, '#e2493a'], [0, .14, 0, .09, '#7cbf3f'], [.05, 0, .12, .09, '#f39a2b']]);
-  plate(11.15, [[-.08, 0, 0, .12, '#e6457a'], [.1, 0, .03, .1, '#f2c14e'], [0, .15, 0, .1, '#8bc34a'], [.02, -.02, .13, .08, '#f39a2b']]);
-  for (const x of [9.45, 10.55]) { world.add(P.lathe([[0, 0], [.07, 0], [.1, .12], [.05, .26], [.08, .32]], 12), '#3b7fb8', T(x, 1.11, 1.9)); for (let i = 0; i < 5; i++) world.add(sp(.065, 8), i % 2 ? '#ffd23f' : '#ffb627', T(x + Math.cos(i * 1.3) * .09, 1.5 + (i % 2) * .06, 1.9 + Math.sin(i * 1.3) * .07)); }
-  world.add(P.lathe([[0, 0], [.14, 0], [.2, .1], [.22, .2], [.19, .22]], 16), PAL.bronze, T(10, 1.11, 2.0));
-  world.add(cy(.19, .19, .01, 16), '#d8c7a6', T(10, 1.31, 2.0));
-  for (const x of [9.55, 10.45]) { world.add(cy(.28, .3, .1, 16), '#e9b949', T(x, .13, 3.0)); world.add(sp(.2, 10), '#f0c55a', T(x, .25, 3.0, 0, 1.3, .3, 1.3)); }
-  // chuông/mõ trong điện
-  world.add(sp(.24, 12), '#a8552b', T(8.3, .42, 2.9, 0, 1, .75, 1)); world.add(cy(.28, .28, .12, 14), '#e3b24a', T(8.3, .13, 2.9));
+  Wh.add(rb(4.4, .95, .72, .06), PAL.redDk, T(10, .6, 1.95));
+  Wh.add(rb(4.46, .07, .78, .03), PAL.gold, T(10, 1.08, 1.95));
+  for (let i = 0; i < 4; i++) { Wh.add(rb(.9, .26, .04, .04), '#9a3423', T(8.6 + i * .93, .5, 2.32)); Wh.add(rb(.12, .04, .04, .02), PAL.gold, T(8.6 + i * .93, .5, 2.35)); }
+  Wh.add(rb(4.4, .08, .06, .02), PAL.gold, T(10, .3, 2.32));
+  Wh.add(rb(4.3, 1.48, .44, .05), '#8f2a1c', T(10, .87, 1.5));
+  Wh.add(rb(4.34, .06, .48, .02), PAL.gold, T(10, 1.61, 1.5));
+  for (const x of [7.92, 12.08]) { Wh.add(cy(.07, .07, .4, 12), PAL.cream, T(x, 1.11, 2.05)); Wh.add(cy(.1, .12, .06, 12), PAL.gold, T(x, 1.11, 2.05)); Gh.add(sp(.06, 8), '#ffcf5a', T(x, 1.58, 2.05, 0, 1, 1.7, 1)); }
+  // 10 bát hương nhỏ, mỗi bài vị một bát (nhang được vẽ động theo từng vị)
+  for (let i = 0; i < 10; i++) { const x = 8.2 + i * .4; Wh.add(P.lathe([[0, 0], [.07, 0], [.11, .06], [.12, .12], [.105, .13]], 14), PAL.bronze, T(x, 1.11, 2.08)); Wh.add(cy(.1, .1, .01, 14), '#d8c7a6', T(x, 1.235, 2.08)); }
+  // bồ đoàn (đệm ngồi) + mõ nhỏ phía trước
+  for (const c of L.cushions) { const x = (c.x - L.HALL.ox) / HS * k, z = (c.y - L.HALL.oy) / HS * k;
+    Wh.add(cy(.26, .28, .1, 18), '#c99a3f', T(x, .13, z)); Wh.add(sp(.21, 12), '#ddb35a', T(x, .24, z, 0, 1.25, .32, 1.25));
+    Wh.add(sp(.075, 10), '#a8552b', T(x, .17, z - .32, 0, 1.2, .8, 1)); Wh.add(cy(.07, .07, .02, 10), '#7a3b20', T(x, .13, z - .32)); }
 
   /* ---- Lư hương lớn ---- */
-  const bx = L.bowl.x * k, bz = L.bowl.y * k - .05;
-  world.add(rb(1.15, .28, 1.15, .1), PAL.stone, T(bx, .14, bz));
-  world.add(rb(.95, .14, .95, .06), PAL.stone2, T(bx, .34, bz));
-  world.add(P.lathe([[0, 0], [.3, 0], [.48, .12], [.6, .32], [.62, .5], [.56, .52], [.54, .5]], 22), PAL.bronze, T(bx, .4, bz));
-  world.add(cy(.55, .55, .01, 20), '#d9c8a6', T(bx, .86, bz));
-  for (let i = 0; i < 3; i++) { const a = i * 2.09 + .5; world.add(cy(.07, .05, .2, 8), '#8a6020', T(bx + Math.cos(a) * .3, .32, bz + Math.sin(a) * .3)); }
-  for (const s of [-1, 1]) world.add(rb(.1, .28, .2, .04), PAL.bronze, T(bx + s * .66, .85, bz));
+  const Wl = grp(world, L.bowl.x * k, L.bowl.y * k - .05, L.bowl.s), bx = 0, bz = 0;
+  Wl.add(rb(1.15, .28, 1.15, .1), PAL.stone, T(bx, .14, bz));
+  Wl.add(rb(.95, .14, .95, .06), PAL.stone2, T(bx, .34, bz));
+  Wl.add(P.lathe([[0, 0], [.3, 0], [.48, .12], [.6, .32], [.62, .5], [.56, .52], [.54, .5]], 22), PAL.bronze, T(bx, .4, bz));
+  Wl.add(cy(.55, .55, .01, 20), '#d9c8a6', T(bx, .86, bz));
+  for (let i = 0; i < 3; i++) { const a = i * 2.09 + .5; Wl.add(cy(.07, .05, .2, 8), '#8a6020', T(bx + Math.cos(a) * .3, .32, bz + Math.sin(a) * .3)); }
+  for (const s of [-1, 1]) Wl.add(rb(.1, .28, .2, .04), PAL.bronze, T(bx + s * .66, .85, bz));
+
+  /* ---- Bể non bộ ---- */
+  for (const o of L.rockeries) { const x = o.x * k, z = o.y * k;
+    world.add(rb(1.1, .32, .7, .06), PAL.stone2, T(x, .16, z)); world.add(rb(1.16, .05, .76, .02), PAL.stone, T(x, .33, z));
+    water.add(rb(.98, .02, .58, .01), PAL.water, T(x, .3, z));
+    [[0, .6, 0, .22], [-.15, .45, .08, .18], [.18, .48, -.05, .17], [.05, .85, .02, .13], [-.05, 1.02, 0, .08]].forEach(([dx, dy, dz, r2]) => world.add(sp(r2, 8), '#8f8a80', T(x + dx, dy, z + dz, dx * 9, 1, 1.4, 1)));
+    world.add(rb(.08, .08, .08, .01), PAL.red, T(x + .1, .92, z + .1)); world.add(P.frustum(.14, .14, .02, .02, .06), PAL.roof, T(x + .1, .96, z + .1));
+    world.add(cy(.01, .015, .3, 4), '#6e5340', T(x - .2, .7, z - .05)); world.add(sp(.1, 8), PAL.leaf3, T(x - .2, 1.0, z - .05, 0, 1.4, .6, 1));
+    for (let i = 0; i < 3; i++) world.add(sp(.04, 6), '#f08a3a', T(x - .3 + i * .25, .31, z + .2 - i * .1, i, 1.6, .5, .8)); }
+  /* ---- Tháp đá ---- */
+  for (const o of L.stupas) { const x = o.x * k, z = o.y * k;
+    for (let i = 0; i < 5; i++) { const w2 = .58 - i * .08; world.add(rb(w2, .34, w2, .03), i % 2 ? '#c9c0ae' : '#b4aa98', T(x, .17 + i * .4, z)); world.add(rb(w2 + .12, .06, w2 + .12, .02), PAL.stone2, T(x, .37 + i * .4, z)); }
+    world.add(P.lathe([[0, 0], [.12, 0], [.14, .1], [.1, .22], [0, .34]], 10), '#c9c0ae', T(x, 2.4, z)); }
 
   /* ---- Gác chuông (cảm hứng Khuê Văn Các): 4 trụ gạch vôi trắng, lầu gỗ son có cửa sổ tròn, mái 2 tầng ---- */
-  const gx = L.bell.x * k, gz = L.bell.y * k;
-  world.add(rb(1.8, .24, 1.4, .08), PAL.stone2, T(gx, .12, gz));
+  const Wb = grp(world, L.bell.x * k, L.bell.y * k, L.bell.s), gx = 0, gz = 0;
+  Wb.add(rb(1.8, .24, 1.4, .08), PAL.stone2, T(gx, .12, gz));
   for (const [dx, dz] of [[-.66, -.46], [.66, -.46], [.66, .46], [-.66, .46]]) {
-    world.add(rb(.3, 1.9, .3, .04), '#e9e3d4', T(gx + dx, 1.19, gz + dz));
-    world.add(rb(.22, 1.5, .02, .01), '#d6cdb8', T(gx + dx, 1.15, gz + dz + Math.sign(dz) * .155));
-    world.add(rb(.34, .1, .34, .03), PAL.stone2, T(gx + dx, .28, gz + dz));
+    Wb.add(rb(.3, 1.9, .3, .04), '#e9e3d4', T(gx + dx, 1.19, gz + dz));
+    Wb.add(rb(.22, 1.5, .02, .01), '#d6cdb8', T(gx + dx, 1.15, gz + dz + Math.sign(dz) * .155));
+    Wb.add(rb(.34, .1, .34, .03), PAL.stone2, T(gx + dx, .28, gz + dz));
   }
-  world.add(rb(1.8, .14, 1.36, .04), PAL.redDk, T(gx, 2.2, gz));                  // sàn lầu
-  world.add(rb(1.5, .7, 1.06, .04), PAL.red, T(gx, 2.62, gz));                     // lầu gỗ
-  for (let i = 0; i < 7; i++) world.add(rb(.04, .7, 1.1, .01), PAL.redDk, T(gx - .66 + i * .22, 2.62, gz));
+  Wb.add(rb(1.8, .14, 1.36, .04), PAL.redDk, T(gx, 2.2, gz));                  // sàn lầu
+  Wb.add(rb(1.5, .7, 1.06, .04), PAL.red, T(gx, 2.62, gz));                     // lầu gỗ
+  for (let i = 0; i < 7; i++) Wb.add(rb(.04, .7, 1.1, .01), PAL.redDk, T(gx - .66 + i * .22, 2.62, gz));
   for (const sz of [-1, 1]) {                                                     // cửa sổ tròn "vầng thái dương"
-    world.add(cy(.25, .25, .04, 24), '#e3c47c', T(gx, 2.62, gz + sz * .53, 0, 1, 1, 1, 1.5708));
-    world.add(cy(.2, .2, .05, 24), '#3b2a22', T(gx, 2.62, gz + sz * .53, 0, 1, 1, 1, 1.5708));
-    for (let i = 0; i < 8; i++) world.add(rb(.4, .025, .02, .005), '#e3c47c', T(gx, 2.62, gz + sz * .56, 0, 1, 1, 1, 0, i * .3927));
+    Wb.add(cy(.25, .25, .04, 24), '#e3c47c', T(gx, 2.62, gz + sz * .53, 0, 1, 1, 1, 1.5708));
+    Wb.add(cy(.2, .2, .05, 24), '#3b2a22', T(gx, 2.62, gz + sz * .53, 0, 1, 1, 1, 1.5708));
+    for (let i = 0; i < 8; i++) Wb.add(rb(.4, .025, .02, .005), '#e3c47c', T(gx, 2.62, gz + sz * .56, 0, 1, 1, 1, 0, i * .3927));
   }
-  for (let i = 0; i < 9; i++) world.add(rb(.05, .2, .05, .01), PAL.red, T(gx - .8 + i * .2, 2.38, gz + .66));  // lan can
-  world.add(rb(1.8, .04, .06, .01), PAL.redDk, T(gx, 2.47, gz + .66));
-  world.add(P.frustum(2.3, 1.85, 1.0, .55, .5), PAL.roof, T(gx, 2.97, gz)); rods(world, gx, 2.97, gz, 2.3, 1.85, 1.0, .55, .5, 0, .24);
-  world.add(rb(2.36, .07, 1.9, .03), PAL.gold, T(gx, 2.97, gz));
-  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(gx + sx * 1.15, 3.02, gz + sz * .92, [sx * .7, sz * .7], .8, world);
-  world.add(rb(.95, .25, .55, .04), PAL.red, T(gx, 3.55, gz));
-  world.add(P.frustum(1.4, 1.0, .5, .2, .38), PAL.roof, T(gx, 3.67, gz)); rods(world, gx, 3.67, gz, 1.4, 1.0, .5, .2, .38, 0, .22);
-  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(gx + sx * .7, 3.7, gz + sz * .5, [sx * .7, sz * .7], .55, world);
-  world.add(sp(.1, 10), PAL.gold, T(gx, 4.1, gz));
+  for (let i = 0; i < 9; i++) Wb.add(rb(.05, .2, .05, .01), PAL.red, T(gx - .8 + i * .2, 2.38, gz + .66));  // lan can
+  Wb.add(rb(1.8, .04, .06, .01), PAL.redDk, T(gx, 2.47, gz + .66));
+  Wb.add(P.frustum(2.3, 1.85, 1.0, .55, .5), PAL.roof, T(gx, 2.97, gz)); rods(Wb, gx, 2.97, gz, 2.3, 1.85, 1.0, .55, .5, 0, .24);
+  Wb.add(rb(2.36, .07, 1.9, .03), PAL.gold, T(gx, 2.97, gz));
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(gx + sx * 1.15, 3.02, gz + sz * .92, [sx * .7, sz * .7], .8, Wb);
+  Wb.add(rb(.95, .25, .55, .04), PAL.red, T(gx, 3.55, gz));
+  Wb.add(P.frustum(1.4, 1.0, .5, .2, .38), PAL.roof, T(gx, 3.67, gz)); rods(Wb, gx, 3.67, gz, 1.4, 1.0, .5, .2, .38, 0, .22);
+  for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(gx + sx * .7, 3.7, gz + sz * .5, [sx * .7, sz * .7], .55, Wb);
+  Wb.add(sp(.1, 10), PAL.gold, T(gx, 4.1, gz));
 
   /* ---- Vườn rau ---- */
   const gd = L.garden;
@@ -219,27 +241,42 @@ function build(R, L) {
     }
   };
   const g0x = (gd.x - 8) * k, g0z = (gd.y - 8) * k, g1x = (gd.x + gd.w + 8) * k, g1z = (gd.y + gd.h + 8) * k;
-  fence(g0x, g0z, g1x, g0z); fence(g0x, g1z, g1x, g1z); fence(g0x, g0z, g0x, g1z); fence(g1x, g0z, g1x, g1z, 8.6, 9.6, 'z');
+  fence(g0x, g0z, g1x, g0z); fence(g0x, g1z, g1x, g1z); fence(g0x, g0z, g0x, g1z); fence(g1x, g0z, g1x, g1z, 14.45, 15.35, 'z');   // cổng vườn mở ra lối đá
   L.plots.forEach(p => {
     world.add(rb(.9, .2, .7, .1, 2), '#6b4024', T(p.x * k, .1, p.y * k - .05));
     for (let i = -1; i <= 1; i++) world.add(rb(.78, .02, .05, .02), '#56331c', T(p.x * k, .205, p.y * k - .05 + i * .2));
   });
-  // đồ trang trí vườn
-  world.add(P.lathe([[0, 0], [.2, 0], [.24, .2], [.22, .42], [.18, .44]], 14), '#8c5a33', T(1.75, 0, 7.55));
-  for (let i = 0; i < 3; i++) world.add(rb(.5, .03, .05, .01), '#5e3a20', T(1.75, .1 + i * .14, 7.55 + .2));
-  world.add(sp(.2, 10), '#d8c39a', T(5.55, .18, 10.45, 0, 1.2, .9, 1)); world.add(sp(.16, 10), '#cdb487', T(5.25, .14, 10.55, 0, 1.2, .9, 1));
-  world.add(P.lathe([[0, 0], [.13, 0], [.15, .2], [.13, .22]], 12), '#5aa0c8', T(1.75, .02, 10.45)); world.add(cy(.02, .02, .3, 6), '#5aa0c8', T(1.9, .12, 10.45, 0, 1, 1, 1, 0, -1.0));
-
+  // rãnh nước giữa các hàng luống
+  for (let r = 0; r < 3; r++) decal.add(rb(gd.w * k - .9, .01, .08, .005), '#5a8fa6', T((gd.x + gd.w / 2 - 35) * k, .085, (L.plots[r * 5].y + 57) * k));
+  // giếng làng: thành gạch, mái nhỏ, gàu
+  { const x = L.well.x * k, z = L.well.y * k;
+    world.add(cy(.32, .34, .45, 16), '#b0a08a', T(x, 0, z)); world.add(cy(.34, .34, .06, 16), '#8f8270', T(x, .45, z)); world.add(cy(.25, .25, .01, 16), '#2f5f78', T(x, .4, z));
+    for (const s2 of [-1, 1]) world.add(cy(.03, .03, 1.1, 6), PAL.woodDk, T(x + s2 * .36, 0, z));
+    world.add(cy(.03, .03, .8, 6), PAL.woodDk, T(x, 1.0, z, 0, 1, 1, 1, 0, 1.5708));
+    world.add(P.frustum(1.0, .7, .2, .7, .22), PAL.roof, T(x, 1.08, z));
+    world.add(cy(.008, .008, .55, 4), '#5b4a3a', T(x, .45, z)); world.add(P.lathe([[0, 0], [.07, 0], [.09, .12], [.08, .13]], 10), '#8a6a45', T(x, .4, z)); }
+  // bù nhìn rơm đội nón
+  { const x = L.scarecrow.x * k, z = L.scarecrow.y * k;
+    world.add(cy(.03, .03, 1.3, 6), PAL.woodDk, T(x, 0, z)); world.add(cy(.025, .025, .9, 6), PAL.woodDk, T(x, .95, z, 0, 1, 1, 1, 0, 1.5708));
+    world.add(P.lathe([[0, .55], [.2, .55], [.17, .85], [.12, 1.0], [0, 1.02]], 10), '#5a6e8a', T(x, 0, z));
+    for (const s2 of [-1, 1]) world.add(sp(.08, 6), '#e2c271', T(x + s2 * .47, .95, z, 0, 1.3, .7, .7));
+    world.add(sp(.15, 10), '#e2c271', T(x, 1.15, z)); world.add(cy(0, .32, .22, 16), '#e6cf98', T(x, 1.2, z)); }
+  // chòi canh trên cọc tre
+  { const x = L.hut.x * k, z = L.hut.y * k;
+    for (const [dx, dz] of [[-.4, -.3], [.4, -.3], [.4, .3], [-.4, .3]]) world.add(cy(.045, .05, 1.0, 6), '#9b7a45', T(x + dx, 0, z + dz));
+    world.add(rb(1.0, .08, .8, .02), '#b48a52', T(x, .95, z)); for (let i = 0; i < 5; i++) world.add(rb(.05, .6, .05, .01), '#b48a52', T(x - .3 + i * .15, .35, z + .32, 0, 1, 1, 1, .35));
+    for (const s2 of [-1, 1]) world.add(rb(1.0, .04, .04, .01), '#9b7a45', T(x, 1.2, z + s2 * .38));
+    world.add(P.frustum(1.3, 1.1, .1, .2, .55), '#c9a65a', T(x, 1.45, z)); world.add(rb(1.32, .05, 1.12, .02), '#a8863f', T(x, 1.45, z)); }
   /* ---- Vườn thú ---- */
   const pn = L.pen;
   world.add(rb(pn.w * k, .04, pn.h * k, .25), '#93c86b', T((pn.x + pn.w / 2) * k, .012, (pn.y + pn.h / 2) * k));
   const p0x = pn.x * k, p0z = pn.y * k, p1x = (pn.x + pn.w) * k, p1z = (pn.y + pn.h) * k;
-  fence(p0x, p0z, p1x, p0z); fence(p0x, p1z, p1x, p1z); fence(p1x, p0z, p1x, p1z); fence(p0x, p0z, p0x, p1z, 8.6, 9.6, 'z');
+  fence(p0x, p0z, p1x, p0z); fence(p0x, p1z, p1x, p1z); fence(p1x, p0z, p1x, p1z); fence(p0x, p0z, p0x, p1z, 14.45, 15.35, 'z');
   const pd = L.pond, px = pd.x * k, pz = pd.y * k, prx = pd.rx * k, prz = pd.ry * k;
   water.add(cy(1, 1, .06, 36), PAL.water, T(px, .0, pz, 0, prx, 1, prz));
   world.add(cy(1, 1, .02, 36), '#2f7f98', T(px, -.0, pz, 0, prx * .96, 1, prz * .96));
   for (let a = 0; a < Math.PI * 2; a += .2) world.add(sp(.17, 8), r() > .5 ? '#bdb6a6' : '#a59d8b', T(px + Math.cos(a) * (prx + .08), .05, pz + Math.sin(a) * (prz + .08), a, 1.3, .55, 1));
-  [[-1.1, -.2], [-.6, .35], [.4, -.4], [1.0, .2], [1.3, -.15], [-.1, .45], [-1.4, .18]].forEach(([dx, dz], i) => {
+  [[-1.1, -.2], [-.6, .35], [.4, -.4], [1.0, .2], [1.3, -.15], [-.1, .45], [-1.4, .18], [1.75, .25], [-1.8, -.1], [.7, .55]].map(([a, b]) => [a * pd.rx / 175, b * pd.ry / 85]).forEach(([dx, dz], i) => {
     water.add(cy(.17, .17, .02, 14), i % 2 ? '#5d9c40' : '#4d8a33', T(px + dx, .07, pz + dz));
     if (i % 2 === 0) { for (let j = 0; j < 6; j++) { const a = j * 1.047; world.add(sp(.06, 8), j % 2 ? PAL.pink : PAL.pink2, T(px + dx + Math.cos(a) * .05, .14, pz + dz + Math.sin(a) * .05, -a, .6, 1.4, .6, 0, .5)); } world.add(sp(.035, 6), '#ffe27a', T(px + dx, .16, pz + dz)); }
   });
@@ -253,14 +290,30 @@ function build(R, L) {
   world.add(P.frustum(1.15, 1.15, .25, .25, .42), PAL.roof, T(px, 1.1, pz)); rods(world, px, 1.1, pz, 1.15, 1.15, .25, .25, .42, 0, .2);
   for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(px + sx * .58, 1.13, pz + sz * .58, [sx * .7, sz * .7], .55, world);
   world.add(sp(.07, 8), PAL.gold, T(px, 1.58, pz));
-  world.add(sp(.8, 14), '#e8c35d', T(15.9, .05, 11.45, 0, 1, .32, .55)); // ổ rơm
+  world.add(sp(.8, 14), '#e8c35d', T(L.nest.x * k, .05, L.nest.y * k, 0, 1, .32, .55)); // ổ rơm
   // chuồng chó
-  const dhx = 18.6, dhz = 9.85;
+  const dhx = L.kennel.x * k, dhz = L.kennel.y * k;
   world.add(rb(.9, .7, .8, .06), '#c9763f', T(dhx, .35, dhz)); world.add(rb(.4, .45, .05, .1), '#4a2a18', T(dhx, .3, dhz + .41));
   world.add(P.frustum(1.1, 1.0, .1, 1.0, .45), '#d94f3a', T(dhx, .7, dhz));
   world.add(cy(.17, .14, .08, 14), '#3d8fd1', T(dhx - .7, 0, dhz + .5)); world.add(cy(.15, .15, .01, 14), '#c49a5b', T(dhx - .7, .08, dhz + .5));
-  world.add(P.lathe([[0, 0], [.16, 0], [.22, .12], [.24, .3]], 14), '#a7764a', T(14.5, 0, 12.6)); // máng
-
+  world.add(P.lathe([[0, 0], [.16, 0], [.22, .12], [.24, .3]], 14), '#a7764a', T(L.nest.x * k + .9, 0, L.nest.y * k + 1.0)); // máng
+  // chuồng gà: nhà gỗ trên cọc, cầu thang, rào lưới
+  { const x = L.coop.x * k, z = L.coop.y * k;
+    for (const [dx, dz] of [[-.55, -.3], [.55, -.3], [.55, .3], [-.55, .3]]) world.add(cy(.04, .04, .45, 6), PAL.woodDk, T(x + dx, 0, z + dz));
+    world.add(rb(1.3, .65, .8, .05), '#b8743f', T(x, .78, z)); for (let i = 0; i < 6; i++) world.add(rb(.02, .62, .82, .005), '#94582c', T(x - .55 + i * .22, .78, z));
+    world.add(rb(.25, .3, .03, .03), '#3b2414', T(x + .3, .65, z + .41));
+    world.add(P.frustum(1.6, 1.0, .2, 1.0, .4), '#a8452f', T(x, 1.1, z));
+    world.add(rb(.22, .03, .8, .01), '#c9a065', T(x + .3, .25, z + .75, 0, 1, 1, 1, .55));
+    for (let i = 0; i < 7; i++) world.add(cy(.015, .015, .4, 4), '#d9cdb8', T(x - 1.0 + i * .33, 0, z + 1.35));
+    world.add(rb(2.0, .02, .02, .005), '#d9cdb8', T(x - .0, .38, z + 1.35));
+    for (let i = 0; i < 6; i++) world.add(sp(.05, 6), '#f1e2b0', T(x - .7 + i * .25, .03, z + .9 + (i % 2) * .15, 0, 1, .5, 1)); }   // thóc rải
+  // chuồng trâu: mái rạ, cột tre, máng cỏ
+  { const x = L.shed.x * k, z = L.shed.y * k;
+    for (const [dx, dz] of [[-.95, -.45], [.95, -.45], [.95, .45], [-.95, .45]]) world.add(cy(.06, .07, 1.4, 8), '#9b7a45', T(x + dx, 0, z + dz));
+    world.add(rb(2.0, .8, .06, .03), '#a8875a', T(x, .55, z - .47));
+    world.add(P.frustum(2.5, 1.5, .4, 1.3, .55), '#c9a65a', T(x, 1.4, z)); world.add(rb(2.52, .06, 1.52, .02), '#a8863f', T(x, 1.4, z));
+    world.add(rb(1.2, .25, .3, .04), '#8a6a45', T(x, .13, z + .1)); for (let i = 0; i < 8; i++) world.add(cy(.008, .02, .2, 4), '#b9c96b', T(x - .5 + i * .14, .24, z + .1, 0, 1, 1, 1, (i % 3 - 1) * .3));
+    for (let i = 0; i < 3; i++) world.add(sp(.28, 10), '#e2c271', T(x + .6 - i * .1, .15 + i * .18, z - .2, 0, 1, .6, 1)); }
   /* ---- Cây ---- */
   for (const tr of L.trees) {
     const x = tr.x * k, z = tr.y * k;
@@ -287,7 +340,7 @@ function build(R, L) {
     world.add(cy(.07, .07, .04, 10), PAL.gold, T(x + side * .36, 1.0, z)); world.add(cy(.01, .02, .12, 6), '#f0c25a', T(x + side * .36, .88, z));
   }
   /* ---- Tam quan (cảm hứng Văn Miếu): 2 trụ biểu đỉnh búp sen, cổng 3 gian tường vôi, mái ngói nâu ---- */
-  const tx = L.gate.x * k, tz = 14.75;
+  const tx = L.gate.x * k, tz = L.GATE_Y * k + .35;
   for (const s of [-1, 1]) {                                                       // trụ biểu
     const x = tx + s * 2.35;
     gate.add(rb(.5, .2, .5, .05), PAL.stone2, T(x, .1, tz));
@@ -349,62 +402,99 @@ function build(R, L) {
   };
   const pole = (x, z, rot) => world.add(cy(.025, .025, 1.6, 6), '#9b7a45', T(x, .05, z, rot, 1, 1, 1, 1.5708));   // đòn gánh
 
-  // --- Cô Tư bán nón ---
+  // sạp hàng có mái bạt sọc trên 4 cột tre
+  const tarp = (x, z, w, d, h, c1, c2) => {
+    for (const [dx, dz, hh] of [[-w / 2, -d / 2, h + .15], [w / 2, -d / 2, h + .15], [w / 2, d / 2, h - .15], [-w / 2, d / 2, h - .15]]) { world.add(cy(.035, .04, hh, 6), '#9b7a45', T(x + dx, 0, z + dz)); world.add(cy(.05, .05, .04, 6), '#7d5c30', T(x + dx, hh - .02, z + dz)); }
+    const n = Math.max(3, Math.round(w / .45)), sw = w / n;
+    for (let i = 0; i < n; i++) world.add(rb(sw + .01, .03, d + .3, .01), i % 2 ? c2 : c1, T(x - w / 2 + sw * (i + .5), h, z, 0, 1, 1, 1, .15));
+    for (let i = 0; i < n; i++) world.add(rb(sw + .01, .14, .03, .01), i % 2 ? c2 : c1, T(x - w / 2 + sw * (i + .5), h - .25, z + d / 2 + .14));   // diềm bạt
+  };
+  const table = (x, z, w, d, h = .48, col = '#b48a52') => {
+    world.add(rb(w, .06, d, .02), col, T(x, h, z));
+    for (let i = 0; i < Math.round(w / .12); i++) world.add(rb(.09, .015, d - .02, .005), '#9b7444', T(x - w / 2 + .06 + i * .12, h + .035, z));
+    for (const [dx, dz] of [[-w / 2 + .06, -d / 2 + .06], [w / 2 - .06, -d / 2 + .06], [w / 2 - .06, d / 2 - .06], [-w / 2 + .06, d / 2 - .06]]) world.add(cy(.03, .03, h, 5), '#7d5c30', T(x + dx, 0, z + dz));
+  };
+  const hangSign = (text, x, y, z, w, bg) => { world.add(rb(w + .08, .34, .05, .03), PAL.woodDk, T(x, y, z)); addTex(signCanvas(text, 700, 120, { bg }), w, .28, T(x, y, z + .03)); };
+  const non = (x, y, z, ry = 0, rx = 0, c = '#e6cf98') => { world.add(cy(0, .3, .2, 18), c, T(x, y, z, ry, 1, 1, 1, rx)); world.add(cy(.3, .3, .01, 18), '#c9ad6e', T(x, y, z, ry, 1, 1, 1, rx)); };
+
+  // --- Sạp nón Cô Tư ---
   { const x = MK.hat.x * k, z = MK.hat.y * k;
-    npc(x, z, { sit: true, shirt: '#c9b48a', hat: 'non' });
-    basket(x - .5, z + .45, (bx, bz) => { for (let i = 0; i < 4; i++) world.add(cy(0, .3, .2, 18), i % 2 ? '#e6cf98' : '#dcc185', T(bx, .2 + i * .05, bz)); });
-    basket(x + .5, z + .45, (bx, bz) => { world.add(cy(.26, .26, .06, 18), '#d9c08a', T(bx, .24, bz)); world.add(cy(.27, .27, .015, 18), '#3b2a1e', T(bx, .3, bz)); for (let i = 0; i < 3; i++) world.add(sp(.12, 10), ['#2b2422', '#3b2a2a', '#c9a862'][i], T(bx - .1 + i * .1, .38, bz + .05 * i, 0, 1, .55, 1)); });
-    pole(x, z + .9, 0); }
-  // --- Cô Sáu bán áo ---
+    tarp(x, z - .15, 2.8, 1.6, 1.95, '#b8382a', '#f1e6cf');
+    table(x, z, 2.3, .8);
+    for (let st = 0; st < 4; st++) for (let i = 0; i < 4 + (st % 2); i++) non(x - .85 + st * .42, .52 + i * .05, z + .05 + (st % 2) * .12);  // chồng nón
+    for (let i = 0; i < 5; i++) non(x - 1.0 + i * .5, 1.45, z + .62, 0, 1.25, i % 2 ? '#e6cf98' : '#dcc185');                            // nón treo diềm bạt
+    world.add(cy(.008, .008, 2.5, 4), '#5b4a3a', T(x - 1.25, 1.66, z + .62, 0, 1, 1, 1, 0, 1.5708));
+    for (const s2 of [-1, 1]) { world.add(cy(.42, .42, .03, 24), '#e2c98f', T(x + 1.45 * s2, .9, z - .55, 0, 1, 1, 1, 1.3)); world.add(cy(.12, .12, .05, 16), '#3b2a1e', T(x + 1.45 * s2, .9, z - .53, 0, 1, 1, 1, 1.3)); }  // nón quai thao dựng
+    npc(x + .2, z - .62, { sit: true, shirt: '#c9b48a', hat: 'non' });
+    basket(x - 1.75, z + .55, (bx, bz) => { for (let i = 0; i < 4; i++) world.add(cy(0, .3, .2, 18), i % 2 ? '#e6cf98' : '#dcc185', T(bx, .2 + i * .05, bz)); });
+    basket(x - 1.75, z - .45, (bx, bz) => world.add(sp(.2, 10), '#7fa865', T(bx, .25, bz, 0, 1.2, .5, 1.2)));
+    world.add(cy(.025, .025, 1.6, 6), '#9b7a45', T(x - 1.75, .45, z + .05, 0, 1, 1, 1, 1.5708));
+    hangSign('NÓN LÁ CÔ TƯ', x, 1.88, z + .7, 1.5, '#7a2a20'); }
+  // --- Sạp áo Cô Sáu ---
   { const x = MK.cloth.x * k, z = MK.cloth.y * k;
-    npc(x, z, { sit: true, shirt: '#8aa0b4', hat: 'non' });
-    const cols = ['#a8382c', '#4f7a5a', '#3b4f7a', '#5b4566', '#c47f86', '#3f8f8a'];
-    basket(x - .5, z + .45, (bx, bz) => cols.slice(0, 3).forEach((c, i) => world.add(rb(.36, .07, .26, .03), c, T(bx, .22 + i * .07, bz, i * .3))));
-    basket(x + .5, z + .45, (bx, bz) => cols.slice(3).forEach((c, i) => world.add(rb(.36, .07, .26, .03), c, T(bx, .22 + i * .07, bz, -i * .3))));
-    for (const s of [-1, 1]) world.add(cy(.03, .03, 1.5, 6), '#7d5131', T(x + .95 + s * .45, 0, z - .1));      // sào phơi áo
-    world.add(cy(.025, .025, 1.0, 6), '#7d5131', T(x + .5, 1.45, z - .1, 0, 1, 1, 1, 0, 1.5708));
-    ['#b8862f', '#2b2b30', '#3f8f8a'].forEach((c, i) => { world.add(P.lathe([[0, -.55], [.17, -.55], [.15, -.2], [.12, 0], [0, .02]], 10), c, T(x + .65 + i * .3, 1.43, z - .1, 0, 1, 1, .5)); });
-    pole(x, z + .9, 0); }
-  // --- Quán ăn vỉa hè: bàn thấp, ghế nhựa đỏ, nồi nước dùng ---
+    tarp(x, z - .15, 2.8, 1.6, 1.95, '#2f5f8f', '#eef0ea');
+    table(x - .25, z + .05, 1.8, .75);
+    const cols = ['#a8382c', '#4f7a5a', '#3b4f7a', '#5b4566', '#c47f86', '#3f8f8a', '#c9902e', '#efe7d6', '#7a5a43'];
+    for (let st = 0; st < 3; st++) for (let i = 0; i < 4; i++) world.add(rb(.42, .06, .3, .03), cols[(st * 4 + i) % cols.length], T(x - .85 + st * .55, .54 + i * .065, z + .05, (i - 1.5) * .08));
+    for (const s2 of [-1, 1]) world.add(cy(.03, .03, 1.7, 6), '#7d5131', T(x + s2 * 1.15, 0, z - .6));                                  // sào phơi áo
+    world.add(cy(.025, .025, 2.3, 6), '#7d5131', T(x - 1.15, 1.62, z - .6, 0, 1, 1, 1, 0, -1.5708));
+    cols.slice(0, 7).forEach((c, i) => { const ax = x - .9 + i * .3; world.add(P.lathe([[0, -.75], [.16, -.75], [.15, -.25], [.13, -.02], [0, 0]], 10), c, T(ax, 1.6, z - .6, 0, 1, 1, .45)); world.add(rb(.5, .07, .07, .03), c, T(ax, 1.45, z - .6)); });
+    world.add(rb(.7, .42, .45, .04), '#7a4a2a', T(x + 1.15, .21, z + .2)); world.add(rb(.72, .05, .47, .02), PAL.gold, T(x + 1.15, .43, z + .2));   // rương gỗ
+    for (let i = 0; i < 3; i++) world.add(cy(.07, .07, .5, 10), cols[i + 3], T(x + .95 + i * .15, .5, z + .2, 0, 1, 1, 1, 0, 1.5708));            // cuộn vải
+    npc(x + .55, z - .2, { shirt: '#8aa0b4', hat: 'non' });
+    hangSign('ÁO TRÀNG CÔ SÁU', x, 1.88, z + .7, 1.5, '#23466b'); }
+  // --- Quán ăn vỉa hè: bếp than, tủ bánh mì, 6 bàn ghế nhựa dưới mái bạt lớn ---
   { const x = MK.food.x * k, z = MK.food.y * k;
-    world.add(rb(1.5, .06, .42, .03), '#c4a070', T(x, .5, z - .05)); for (const s of [-1, 1]) world.add(rb(.06, .5, .38, .02), '#8a6a45', T(x + s * .68, .25, z - .05));
-    world.add(cy(.26, .24, .42, 18), '#9aa2a8', T(x - .45, .53, z - .1)); world.add(cy(.27, .27, .03, 18), '#c7cdd2', T(x - .45, .95, z - .1));          // nồi nước dùng
-    world.add(cy(.2, .22, .12, 14), '#3b3b3b', T(x - .45, .4, z - .1));
-    for (let i = 0; i < 4; i++) { world.add(P.lathe([[0, 0], [.04, 0], [.08, .05], [.09, .07]], 12), '#f2efe6', T(x + .05 + i * .18, .53, z + .03)); world.add(cy(.075, .075, .01, 10), ['#e9c46a', '#c0583a', '#d4a373', '#f0e3c0'][i], T(x + .05 + i * .18, .59, z + .03)); }
-    npc(x + .2, z - .45, { shirt: '#b5544a', pants: '#2e2a2a', apron: '#e9e2d0', hat: 'none' });
-    for (let i = 0; i < 6; i++) { const sx = x - .8 + i * .34, sz = z + .65 + (i % 2) * .1; world.add(cy(.12, .14, .03, 12), i % 3 ? '#d23c2f' : '#2f6fb3', T(sx, .26, sz)); for (const [dx, dz] of [[-.08, -.08], [.08, -.08], [.08, .08], [-.08, .08]]) world.add(cy(.015, .02, .26, 4), i % 3 ? '#b83226' : '#285f9a', T(sx + dx, 0, sz + dz)); }
-    world.add(rb(.72, .5, .5, .04), '#cfd6db', T(x + .95, .25, z - .2)); world.add(rb(.74, .05, .52, .02), '#8a9aa6', T(x + .95, .52, z - .2));   // tủ kính bánh mì
-    for (let i = 0; i < 3; i++) world.add(sp(.09, 8), '#d8a35a', T(x + .78 + i * .17, .6, z - .2, 0, 1.8, .6, .8));
-    world.add(cy(.03, .03, 1.7, 6), '#5b3b22', T(x - .85, 0, z - .35)); world.add(cy(.03, .03, 1.7, 6), '#5b3b22', T(x + 1.3, 0, z - .35));       // mái bạt
-    world.add(P.frustum(2.4, .9, 2.3, .1, .18), '#2f6fb3', T(x + .22, 1.68, z - .1)); }
-  // --- Cắt tóc vỉa hè: gương treo cột, ghế gỗ, thợ cắt ---
-  { const x = MK.barber.x * k, z = MK.barber.y * k;
-    world.add(cy(.06, .07, 1.8, 8), '#6e5340', T(x - .35, 0, z - .25));
-    world.add(rb(.42, .55, .04, .02), '#8a6a45', T(x - .35, 1.25, z - .2)); world.add(rb(.34, .46, .02, .01), '#cfe3ea', T(x - .35, 1.25, z - .17));
+    tarp(x, z - .05, 4.6, 2.4, 2.15, '#2f6fb3', '#e9eef2');
+    world.add(rb(2.0, .8, .55, .04), '#c9b9a0', T(x - .1, .4, z - .95)); world.add(rb(2.04, .05, .6, .02), '#8a7a62', T(x - .1, .82, z - .95));   // quầy
+    world.add(cy(.3, .26, .5, 16), '#9aa2a8', T(x - .65, .85, z - .95)); world.add(cy(.31, .31, .03, 16), '#c7cdd2', T(x - .65, 1.35, z - .95));   // nồi nước dùng
+    world.add(cy(.2, .18, .3, 14), '#9aa2a8', T(x - .1, .85, z - .95)); world.add(cy(.21, .21, .03, 14), '#c7cdd2', T(x - .1, 1.15, z - .95));
+    world.add(cy(.25, .28, .4, 14), '#5a4a42', T(x - 1.35, 0, z - .95)); world.add(cy(.18, .18, .02, 14), '#ff7a2a', T(x - 1.35, .41, z - .95));     // bếp than
+    world.add(cy(.22, .2, .22, 14), '#3b3b3b', T(x - 1.35, .42, z - .95));
+    world.add(rb(.8, .55, .45, .04), '#cfd6db', T(x + .7, 1.1, z - .95)); world.add(rb(.82, .05, .47, .02), '#8a9aa6', T(x + .7, 1.39, z - .95)); // tủ kính bánh mì
+    for (let i = 0; i < 4; i++) world.add(sp(.09, 8), '#d8a35a', T(x + .45 + i * .17, 1.0, z - .95, 0, 1.8, .6, .8));
+    npc(x - .35, z - 1.45, { shirt: '#b5544a', pants: '#2e2a2a', apron: '#e9e2d0', hat: 'none' });
+    for (let r2 = 0; r2 < 2; r2++) for (let c = 0; c < 3; c++) {                                                           // 6 bàn nhựa thấp
+      const tx2 = x - 1.4 + c * 1.4, tz2 = z + .05 + r2 * .85;
+      world.add(rb(.62, .04, .42, .02), r2 ? '#e8e2d4' : '#d6e2e8', T(tx2, .38, tz2)); for (const [dx, dz] of [[-.25, -.16], [.25, -.16], [.25, .16], [-.25, .16]]) world.add(cy(.015, .02, .38, 4), '#8a8a8a', T(tx2 + dx, 0, tz2 + dz));
+      world.add(P.lathe([[0, 0], [.04, 0], [.08, .05], [.09, .07]], 10), '#f2efe6', T(tx2 - .1, .4, tz2)); world.add(cy(.075, .075, .01, 10), ['#e9c46a', '#c0583a', '#d4a373'][c], T(tx2 - .1, .46, tz2));
+      world.add(cy(.03, .03, .12, 6), '#c0392b', T(tx2 + .17, .4, tz2 - .05));                                                // lọ tương ớt
+      for (const [dx, dz] of [[-.45, 0], [.45, 0], [0, .38]]) { const sx = tx2 + dx, sz = tz2 + dz, rc = (c + r2) % 2 ? '#d23c2f' : '#2f6fb3'; world.add(cy(.12, .14, .03, 12), rc, T(sx, .24, sz)); for (const [ex, ez] of [[-.08, -.08], [.08, -.08], [.08, .08], [-.08, .08]]) world.add(cy(.015, .02, .24, 4), rc, T(sx + ex, 0, sz + ez)); }
+    }
+    hangSign('QUÁN ĂN VỈA HÈ', x, 2.05, z + 1.2, 2.0, '#1f4f80');
+    world.add(rb(.5, .7, .04, .03), '#3b3b3b', T(x + 2.5, .75, z + .9, -.3)); world.add(cy(.02, .02, .45, 4), '#7d5c30', T(x + 2.5, 0, z + .87)); }   // bảng thực đơn
+  // --- Cắt tóc gốc cây: gương đóng vào thân cây, ghế gỗ, bàn đồ nghề ---
+  { const x = MK.barber.x * k, z = MK.barber.y * k, tx2 = x - .8, tz2 = z - .35;
+    world.add(cy(.2, .3, 1.8, 12), '#7d6450', T(tx2, 0, tz2));
+    [[0, 2.2, 0, 1.0], [-.6, 1.9, .3, .7], [.6, 2.0, -.2, .75], [.1, 2.65, .1, .6]].forEach(([dx, dy, dz, s2], i) => world.add(sp(s2, 12), [PAL.leaf3, PAL.leaf, '#4f7f3f'][i % 3], T(tx2 + dx, dy, tz2 + dz, 0, 1, .75, 1)));
+    world.add(rb(.46, .6, .04, .02), '#8a6a45', T(tx2 + .02, 1.25, tz2 + .3)); world.add(rb(.38, .5, .02, .01), '#cfe3ea', T(tx2 + .02, 1.25, tz2 + .325));
     world.add(rb(.4, .06, .36, .02), '#9b6b3a', T(x, .42, z)); world.add(rb(.4, .4, .05, .02), '#9b6b3a', T(x, .62, z - .17));
     for (const [dx, dz] of [[-.17, -.15], [.17, -.15], [.17, .15], [-.17, .15]]) world.add(cy(.025, .025, .42, 5), '#7d5131', T(x + dx, 0, z + dz));
     npc(x + .55, z - .05, { shirt: '#f2efe6', pants: '#3b4f7a', hat: 'none', yaw: -.6 });
-    world.add(rb(.3, .06, .2, .02), '#e9e2d0', T(x + .95, .62, z - .25));                     // khăn
-    world.add(cy(.12, .1, .3, 10), '#d8d2c4', T(x + .95, 0, z - .25)); }
-  // --- Am gieo quẻ ---
-  { const x = MK.fortune.x * k, z = MK.fortune.y * k;
-    world.add(rb(1.2, .2, .9, .06), PAL.stone2, T(x, .1, z));
-    for (const [dx, dz] of [[-.48, -.32], [.48, -.32], [.48, .32], [-.48, .32]]) world.add(cy(.06, .06, 1.25, 8), PAL.red, T(x + dx, .2, z + dz));
-    world.add(rb(.8, .45, .5, .04), '#7a2a20', T(x, .42, z - .05)); world.add(rb(.84, .04, .54, .02), PAL.gold, T(x, .66, z - .05));
-    world.add(cy(.09, .08, .32, 12), '#b48a52', T(x - .15, .68, z));                                                  // ống xăm
-    for (let i = 0; i < 9; i++) world.add(cy(.008, .008, .2, 4), '#d9c08a', T(x - .15 + Math.cos(i) * .04, .9, z + Math.sin(i) * .04, 0, 1, 1, 1, Math.sin(i * 2) * .2, Math.cos(i * 2) * .2));
-    world.add(P.lathe([[0, 0], [.08, 0], [.1, .06], [.09, .08]], 10), PAL.bronze, T(x + .2, .68, z));
-    world.add(P.frustum(1.6, 1.3, .5, .3, .5), PAL.roof, T(x, 1.45, z)); rods(world, x, 1.45, z, 1.6, 1.3, .5, .3, .5, 0, .22);
-    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(x + sx * .8, 1.48, z + sz * .65, [sx * .7, sz * .7], .55, world);
-    world.add(sp(.08, 8), PAL.gold, T(x, 1.98, z)); }
+    table(x + .95, z - .45, .55, .4, .55, '#9b6b3a');
+    world.add(rb(.3, .06, .2, .02), '#e9e2d0', T(x + .95, .62, z - .45)); world.add(cy(.03, .03, .16, 6), '#3b6fb3', T(x + 1.1, .6, z - .4));
+    world.add(cy(.12, .1, .3, 10), '#d8d2c4', T(x + .4, 0, z + .5));
+    hangSign('CẮT TÓC GỐC CÂY', x + .2, 1.6, z - .65, 1.3, '#5a3a20');
+    world.add(cy(.03, .03, 1.45, 6), '#7d5c30', T(x + .2 - .6, 0, z - .67)); world.add(cy(.03, .03, 1.45, 6), '#7d5c30', T(x + .2 + .6, 0, z - .67)); }
+  // --- Am xin quẻ (phóng to) ---
+  { const Wf = grp(world, MK.fortune.x * k, MK.fortune.y * k, MK.fortune.s), x = 0, z = 0;
+    Wf.add(rb(1.2, .2, .9, .06), PAL.stone2, T(x, .1, z));
+    for (const [dx, dz] of [[-.48, -.32], [.48, -.32], [.48, .32], [-.48, .32]]) Wf.add(cy(.06, .06, 1.25, 8), PAL.red, T(x + dx, .2, z + dz));
+    Wf.add(rb(.8, .45, .5, .04), '#7a2a20', T(x, .42, z - .05)); Wf.add(rb(.84, .04, .54, .02), PAL.gold, T(x, .66, z - .05));
+    Wf.add(cy(.09, .08, .32, 12), '#b48a52', T(x - .15, .68, z));                                                  // ống xăm
+    for (let i = 0; i < 9; i++) Wf.add(cy(.008, .008, .2, 4), '#d9c08a', T(x - .15 + Math.cos(i) * .04, .9, z + Math.sin(i) * .04, 0, 1, 1, 1, Math.sin(i * 2) * .2, Math.cos(i * 2) * .2));
+    Wf.add(P.lathe([[0, 0], [.08, 0], [.1, .06], [.09, .08]], 10), PAL.bronze, T(x + .2, .68, z));
+    Wf.add(P.frustum(1.6, 1.3, .5, .3, .5), PAL.roof, T(x, 1.45, z)); rods(Wf, x, 1.45, z, 1.6, 1.3, .5, .3, .5, 0, .22);
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(x + sx * .8, 1.48, z + sz * .65, [sx * .7, sz * .7], .55, Wf);
+    Wf.add(sp(.08, 8), PAL.gold, T(x, 1.98, z)); }
   // --- Cây đa đầu chợ (khu quét lá) ---
-  { const x = MK.banyan.x * k, z = MK.banyan.y * k;
-    world.add(cy(.38, .55, 2.4, 14), '#7d6450', T(x, 0, z));
-    for (let i = 0; i < 6; i++) { const a = i * 1.047 + .3; world.add(cy(.06, .16, .9, 8), '#735a46', T(x + Math.cos(a) * .35, 0, z + Math.sin(a) * .3, 0, 1, 1, 1, Math.sin(a) * .7, -Math.cos(a) * .7)); }
-    for (let i = 0; i < 5; i++) { const a = i * 1.25 + .6; world.add(cy(.07, .13, 1.6, 8), '#7d6450', T(x + Math.cos(a) * .2, 1.9, z + Math.sin(a) * .2, 0, 1, 1, 1, Math.sin(a) * 1.0, -Math.cos(a) * 1.0)); }
-    for (let i = 0; i < 14; i++) { const a = i * .9, rr = 1.0 + (i % 3) * .5; world.add(cy(.018, .018, 1.4 + (i % 4) * .4, 4), '#8a7058', T(x + Math.cos(a) * rr, 3.0 - (1.4 + (i % 4) * .4), z + Math.sin(a) * rr * .8)); }   // rễ phụ
-    [[0, 3.6, 0, 1.9], [-1.3, 3.2, .3, 1.4], [1.3, 3.3, -.2, 1.5], [.3, 4.3, .1, 1.3], [-.6, 3.5, -1.0, 1.2], [.7, 3.3, 1.0, 1.25], [-1.6, 2.9, -.6, 1.0], [1.7, 2.9, .7, 1.0]].forEach(([dx, dy, dz, s], i) => world.add(sp(s, 14), [PAL.leaf3, PAL.leaf, '#4f7f3f'][i % 3], T(x + dx, dy, z + dz, 0, 1, .72, 1)));
-    world.add(rb(.5, .3, .35, .05), PAL.stone2, T(x + .1, .15, z + .55)); world.add(P.lathe([[0, 0], [.1, 0], [.13, .08], [.12, .1]], 10), PAL.bronze, T(x + .1, .3, z + .55));   // bát hương gốc đa
+  { const Wy = grp(world, MK.banyan.x * k, MK.banyan.y * k, MK.banyan.s), x = 0, z = 0;
+    Wy.add(cy(.38, .55, 2.4, 14), '#7d6450', T(x, 0, z));
+    for (let i = 0; i < 6; i++) { const a = i * 1.047 + .3; Wy.add(cy(.06, .16, .9, 8), '#735a46', T(x + Math.cos(a) * .35, 0, z + Math.sin(a) * .3, 0, 1, 1, 1, Math.sin(a) * .7, -Math.cos(a) * .7)); }
+    for (let i = 0; i < 5; i++) { const a = i * 1.25 + .6; Wy.add(cy(.07, .13, 1.6, 8), '#7d6450', T(x + Math.cos(a) * .2, 1.9, z + Math.sin(a) * .2, 0, 1, 1, 1, Math.sin(a) * 1.0, -Math.cos(a) * 1.0)); }
+    for (let i = 0; i < 14; i++) { const a = i * .9, rr = 1.0 + (i % 3) * .5; Wy.add(cy(.018, .018, 1.4 + (i % 4) * .4, 4), '#8a7058', T(x + Math.cos(a) * rr, 3.0 - (1.4 + (i % 4) * .4), z + Math.sin(a) * rr * .8)); }   // rễ phụ
+    [[0, 3.6, 0, 1.9], [-1.3, 3.2, .3, 1.4], [1.3, 3.3, -.2, 1.5], [.3, 4.3, .1, 1.3], [-.6, 3.5, -1.0, 1.2], [.7, 3.3, 1.0, 1.25], [-1.6, 2.9, -.6, 1.0], [1.7, 2.9, .7, 1.0]].forEach(([dx, dy, dz, s], i) => Wy.add(sp(s, 14), [PAL.leaf3, PAL.leaf, '#4f7f3f'][i % 3], T(x + dx, dy, z + dz, 0, 1, .72, 1)));
+    Wy.add(rb(.5, .3, .35, .05), PAL.stone2, T(x + .1, .15, z + .55)); Wy.add(P.lathe([[0, 0], [.1, 0], [.13, .08], [.12, .1]], 10), PAL.bronze, T(x + .1, .3, z + .55));   // bát hương gốc đa
   }
   // --- Sân kéo co ---
   { const t = MK.tug, x = t.x * k, z = t.y * k, w = t.w * k, h = t.h * k;
@@ -419,18 +509,25 @@ function build(R, L) {
     world.add(cy(sh.r * k - .25, sh.r * k - .25, .055, 40), '#c9bfae', T(x, 0, z));
     world.add(cy(.07, .09, 2.9, 10), '#8d949a', T(x, 0, z));
     for (const a of [.5, 2.1, 3.7, 5.2]) { world.add(cy(.04, .2, .35, 12), '#a7adb3', T(x + Math.cos(a) * .18, 2.6, z + Math.sin(a) * .18, 0, 1, 1, 1, Math.sin(a) * 1.3, -Math.cos(a) * 1.3)); }
-    world.add(cy(.05, .05, .5, 6), '#8d949a', T(x, 2.45, z, 0, 1, 1, 1, 0, 1.5708)); }
+    world.add(cy(.05, .05, .5, 6), '#8d949a', T(x, 2.45, z, 0, 1, 1, 1, 0, 1.5708));
+    const sz = z + 1.6;                                                                       // sân khấu nhỏ
+    world.add(rb(2.2, .35, .8, .05), '#8a5a35', T(x, .175, sz)); world.add(rb(2.24, .04, .84, .02), '#c0392b', T(x, .36, sz));
+    for (const s2 of [-1, 1]) world.add(cy(.04, .04, 1.9, 6), '#5b3b22', T(x + s2 * 1.05, 0, sz + .35));
+    world.add(rb(2.1, 1.1, .04, .02), '#a8302a', T(x, 1.15, sz + .38));
+    addTex(signCanvas('XẢ GIẬN MIỄN PHÍ*', 800, 140, { bg: '#7a1f1a' }), 1.7, .3, T(x, 1.45, sz + .355, Math.PI));
+    world.add(rb(.3, .4, .25, .04), '#2b2b2b', T(x - .85, .56, sz)); world.add(cy(.09, .09, .02, 12), '#555', T(x - .85, .6, sz - .13, 0, 1, 1, 1, 1.5708));   // loa thùng
+    world.add(cy(.015, .015, .5, 4), '#888', T(x + .3, .36, sz - .1)); world.add(sp(.04, 6), '#333', T(x + .3, .88, sz - .1)); }
 
   // texture: hoành phi, câu đối, biển hiệu
-  const addTex = (cv, w, h, m, em = .35, frame) => { const tex = R.texture(cv); if (frame) world.add(frame[0], frame[1], frame[2]); texItems.push({ mesh: R.mesh(new Geo().add(P.quad(w, h), '#ffffff')), m, tex, em }); };
-  addTex(signCanvas('TỔ NGHIỆP DESIGNER', 1024, 160), 2.7, .42, T(10, 2.56, 1.42));
-  addTex(verticalSign(['CTRL', '+S', 'THƯỜNG', 'XUYÊN'], 150, 600), .36, 1.44, T(7.56, 1.72, 1.43));
-  addTex(verticalSign(['FILE', 'GỐC', 'MÃI', 'CÒN'], 150, 600), .36, 1.44, T(12.44, 1.72, 1.43));
-  addTex(signCanvas('VẠN SỰ UNDO', 900, 130), 2.4, .32, T(10, .83, 2.345), .3);
+  addTex(signCanvas('TỔ NGHIỆP DESIGNER', 1024, 160), 2.7, .42, M4.mul(HM, T(10, 2.56, 1.42)));
+  addTex(verticalSign(['CTRL', '+S', 'THƯỜNG', 'XUYÊN'], 150, 600), .36, 1.44, M4.mul(HM, T(7.56, 1.72, 1.43)));
+  addTex(verticalSign(['FILE', 'GỐC', 'MÃI', 'CÒN'], 150, 600), .36, 1.44, M4.mul(HM, T(12.44, 1.72, 1.43)));
+  addTex(signCanvas('VẠN SỰ UNDO', 900, 130), 2.4, .32, M4.mul(HM, T(10, .83, 2.345)), .3);
   const gsign = (text, x, z) => { world.add(cy(.05, .05, .9, 8), PAL.woodDk, T(x, 0, z)); world.add(rb(1.9, .46, .08, .05), PAL.woodDk, T(x, .95, z)); addTex(signCanvas(text, 800, 180), 1.8, .4, T(x, .95, z + .045)); };
-  gsign('VƯỜN RAU PHƯỚC ĐỨC', 3.65, 7.05); gsign('VƯỜN THÚ CƯNG', 15.5, 6.78);
-  gsign('GIEO QUẺ', 17.05, 16.3); gsign('QUÁN ĂN VỈA HÈ', 13.0, 16.9); gsign('CẮT TÓC VỈA HÈ', 15.6, 17.15); gsign('HÀNG NÓN · HÀNG ÁO', 6.5, 17.0);
-  gsign('SÂN KÉO CO', 4.5, 19.6); gsign('BÃI KHẨU NGHIỆP', 12.9, 20.3); gsign('CÂY ĐA QUÉT LÁ', 2.0, 15.4);
+  const MKs = L.market;
+  gsign('VƯỜN RAU PHƯỚC ĐỨC', (L.garden.x + L.garden.w / 2) * k, L.garden.y * k - .6); gsign('NÔNG TRẠI', (L.pen.x + L.pen.w / 2) * k, L.pen.y * k - .45);
+  gsign('AM XIN QUẺ', MKs.fortune.x * k - 2.0, MKs.fortune.y * k + 1.5); gsign('GÁC CHUÔNG', L.bell.x * k + 2.0, L.bell.y * k + 1.5);
+  gsign('SÂN KÉO CO', MKs.tug.x * k, (MKs.tug.y - MKs.tug.h / 2) * k - .7); gsign('BÃI KHẨU NGHIỆP', MKs.shout.x * k - 2.9, MKs.shout.y * k - 1.6); gsign('CÂY ĐA QUÉT LÁ', MKs.banyan.x * k + 2.0, MKs.banyan.y * k + 1.3);
   const gateSign = { mesh: R.mesh(new Geo().add(P.quad(1.66, .4), '#ffffff', T(0, 0, .045))), m: T(tx, 3.18, tz, 0, 1, 1, 1, -.38), tex: R.texture(signCanvas('CHÙA BA PHẢI', 800, 160)), em: .35 };
 
   return {
