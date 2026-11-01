@@ -67,13 +67,34 @@ const BOTS = [
   ['Thích Kéo Layer', '#7a5a43', 'bald'], ['Thích Căn Lề', '#6f7d8c', 'khan'], ['Thích Pen Tool', '#c9902e', 'bald'],
   ['Thích Keyframe', '#3b4f7a', 'none'], ['Thích Gradient', '#efe7d6', 'non']
 ];
+const MKT = L.market, GY = L.GATE_Y, AX = L.altar.x;
 const POI = {
-  altar: [[1060, 420], [940, 430], [1150, 400], [860, 410]], bowl: [[1080, 700], [920, 700], [1000, 760]],
-  garden: L.plots.map(p => [p.x, p.y + 40]), pen: [[1500, 1080], [1700, 1100], [1600, 950], [1800, 1180]], bell: [[330, 430], [420, 420]],
-  wander: [[1100, 900], [900, 1100], [1100, 1200], [700, 900], [1300, 900], [600, 560]],
-  shout: [[1500, 2060], [1620, 2120], [1560, 2000]], sweep: L.leaves.map(l => [l.x, l.y + 40]), eat: [[1250, 1880], [1350, 1890]]
+  altar: [[AX + 70, 610], [AX - 70, 615], [AX + 200, 600], [AX - 200, 600]], bowl: [[L.bowl.x + 110, L.bowl.y + 100], [L.bowl.x - 110, L.bowl.y + 100], [L.bowl.x, L.bowl.y + 160]],
+  garden: L.plots.map(p => [p.x, p.y + 40]), pen: [[L.pen.x + 160, L.pen.y + 420], [L.pen.x + 380, L.pen.y + 450], [L.pen.x + 300, L.pen.y + 560], [L.pen.x + 520, L.pen.y + 480]],
+  bell: [[L.bell.x, L.bell.y + 130], [L.bell.x + 110, L.bell.y + 120]], fortune: [[MKT.fortune.x, MKT.fortune.y + 135], [MKT.fortune.x - 90, MKT.fortune.y + 140]], cushion: L.cushions.map(c => [c.x, c.y]),
+  wander: [[1100, 900], [1700, 1000], [1250, 1200], [1600, 780], [1000, 760], [1850, 1150], [1400, 1650]],
+  shout: [[MKT.shout.x - 80, MKT.shout.y], [MKT.shout.x + 60, MKT.shout.y + 60], [MKT.shout.x, MKT.shout.y - 90]], sweep: L.leaves.map(l => [l.x, l.y + 40]), eat: [[MKT.food.x - 140, MKT.food.y + 45], [MKT.food.x, MKT.food.y + 45], [MKT.food.x + 140, MKT.food.y + 130]]
 };
-const HUB = [1100, 860];
+const HUB = [L.gate.x - 140, 1120];   // né lư hương giữa sân
+const MARKET_KINDS = ['shout', 'sweep', 'eat'];
+// tuyến đi cho bot: luôn đi qua trục chính và cổng chùa
+function route(b, kind, tgt) {
+  const path = [], inMkt = b.y > GY, toMkt = MARKET_KINDS.includes(kind);
+  if (inMkt && toMkt) { path.push([L.gate.x, 2620], [tgt[0], 2620]); }
+  else if (inMkt) { path.push([L.gate.x, Math.min(2620, b.y)], [L.gate.x, GY + 120], [L.gate.x, GY - 150], [L.gate.x, 1250], HUB); }
+  else if (toMkt) { path.push(HUB, [L.gate.x, 1250], [L.gate.x, GY - 150], [L.gate.x, GY + 120], [L.gate.x, 2620], [tgt[0], 2620]); }
+  else path.push(HUB);
+  if (!toMkt) {
+    if (kind === 'altar' || kind === 'cushion') path.push([HUB[0], 760], [AX, 700], [AX, 640]);
+    if (kind === 'bell') path.push([1000, 740], [L.bell.x + 230, 740]);
+    if (kind === 'fortune') path.push([1800, 740], [MKT.fortune.x - 230, 740]);
+    if (kind === 'garden') path.push([1100, 1490], [L.garden.x + L.garden.w + 40, 1490], [L.garden.x + L.garden.w - 60, 1490]);
+    if (kind === 'pen') path.push([1700, 1490], [L.pen.x - 40, 1490], [L.pen.x + 80, 1490]);
+  }
+  path.push([tgt[0] + (kind === 'cushion' ? 0 : (Math.random() - .5) * 30), tgt[1] + (kind === 'cushion' ? 0 : (Math.random() - .5) * 20)]);
+  return path;
+}
+const dayVN = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
 
 window.LocalServer = function (deliver) {
   const emit = m => setTimeout(() => deliver(m), 0);
@@ -81,34 +102,51 @@ window.LocalServer = function (deliver) {
   const altar = get('pk_demo_altar', null) || DEFAULT_ALTAR;
   const vouchers = get('pk_demo_vouchers', null) || DEFAULT_VOUCHERS;
   let profKey = 'pk_demo_profile', prof = { phuoc: 20, rau: 0, digDay: '', digsToday: 0, wins: [] }, acc = null;
-  const day = () => new Date().toISOString().slice(0, 10);
+  const day = dayVN;
+  const BELL_PER_DAY = 5, FORTUNE_PER_DAY = 3;
+  const dd = () => { if (!prof.dd || prof.dd.day !== day()) prof.dd = { day: day(), bell: 0, bellHits: 0, fq: [], acc: null, mo: 0, beads: 0 }; return prof.dd; };
+  const todayOut = () => { const d = dd(); return { bellLeft: Math.max(0, BELL_PER_DAY - d.bell), fortuneLeft: d.acc ? 0 : Math.max(0, FORTUNE_PER_DAY - d.fq.length), drawn: d.fq.map(i => ({ no: i + 1, text: fortunes[i] || '' })), accepted: d.acc, moLeft: Math.max(0, RU.CHANT.mo.perDay - d.mo), beadsLeft: Math.max(0, RU.CHANT.beads.perDay - d.beads) }; };
   const profile = () => {
     if (prof.digDay !== day()) { prof.digDay = day(); prof.digsToday = 0; }
     put(profKey, prof);
     const st = RU.stamina(prof, Date.now()); put(profKey, prof);
-    return { phuoc: prof.phuoc, rau: prof.rau, digsLeft: Math.max(0, cfg.digsPerDay - prof.digsToday), digsPerDay: cfg.digsPerDay, wins: prof.wins, st, stMax: RU.STAMINA_MAX, look: acc ? { color: acc.color, hat: acc.hat, hair: acc.hair } : {}, items: acc ? acc.items : { hats: [], colors: [] } };
+    return { phuoc: prof.phuoc, rau: prof.rau, digsLeft: Math.max(0, cfg.digsPerDay - prof.digsToday), digsPerDay: cfg.digsPerDay, wins: prof.wins, st, stMax: RU.STAMINA_MAX, today: todayOut(), look: acc ? { color: acc.color, hat: acc.hat, hair: acc.hair } : {}, items: acc ? acc.items : { hats: [], colors: [] } };
   };
   const plots = L.plots.map(p => ({ id: p.id, state: 'ripe', regrowAt: 0 }));
   const leaves = L.leaves.map(l => ({ id: l.id, state: 'full', regrowAt: 0 }));
-  const prices = { fortune: 5, shout: 1, sweep: 2 }, fortunes = get('pk_demo_fortunes', null) || RU.DEFAULT_FORTUNES;
+  const prices = { fortune: 5, shout: 1, sweep: 2, bellReward: 3, bellPenalty: 1, chant: 2 }, fortunes = get('pk_demo_fortunes', null) || RU.DEFAULT_FORTUNES;
   const tug = { offers: [], match: null };
   const tugState = () => ({ offers: tug.offers, match: tug.match && { a: tug.match.a, b: tug.match.b, aName: tug.match.aName, bName: tug.match.bName, bet: tug.match.bet, pos: tug.match.pos, startAt: tug.match.startAt, endAt: tug.match.endAt } });
   const tired = () => emit({ t: 'tired', profile: profile() });
   const look = () => { saveAccount(acc); me.color = acc.color; me.hat = acc.hat; me.hair = acc.hair; emit({ t: 'look', id: 'me', color: acc.color, hat: acc.hat, hair: acc.hair }); };
   const M = L.market;
   let incense = [], me = null;
-  const bots = BOTS.map(([name, color, hat], i) => ({ id: 'bot' + i, name, color, hat: hat === 'bald' ? 'none' : hat, hair: hat === 'bald' ? 'bald' : 'bun', x: 1000 + (i - 2) * 60, y: 1150 - i * 30, dir: 1, moving: false, path: [], wait: 1 + i * 1.5, goal: null }));
+  const bots = BOTS.map(([name, color, hat], i) => ({ id: 'bot' + i, name, color, hat: hat === 'bald' ? 'none' : hat, hair: hat === 'bald' ? 'bald' : 'bun', x: L.gate.x + (i - 2) * 70, y: 1150 - i * 40, dir: 1, moving: false, path: [], wait: 1 + i * 1.5, goal: null }));
   const rooms = () => [{ id: 'chua-1', name: 'Chùa 1', num: 1, online: bots.length + 1, capacity: 30 }];
-  const pub = b => ({ id: b.id, name: b.name, color: b.color, hat: b.hat, hair: b.hair, x: b.x, y: b.y, dir: b.dir, moving: b.moving });
+  const pub = b => ({ id: b.id, name: b.name, color: b.color, hat: b.hat, hair: b.hair, x: b.x, y: b.y, dir: b.dir, moving: b.moving, pose: b.pose || '' });
   const near = (a, b, r) => Math.hypot(a.x - b.x, a.y - b.y) < r;
   const code = prefix => prefix + '-' + Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random() * 32 | 0]).join('');
 
   function lightIncense(who, appId, wish) {
-    const app = altar.find(a => a.id === appId) || altar[0];
+    const app = appId === 'all' ? { id: 'all', name: 'Chư vị Tổ Nghiệp' } : altar.find(a => a.id === appId) || altar[0];
     const stick = { id: Math.random().toString(36).slice(2), by: who.name, app: app.id, appName: app.name, wish, t: Date.now(), slot: Math.random() * 1000 | 0 };
-    incense.push(stick); if (incense.length > 40) incense.shift();
+    incense.push(stick); if (incense.length > 90) incense.shift();
     emit({ t: 'incense', stick, by: who.id });
   }
+
+  // ---- thời tiết: bản demo gọi thẳng Open-Meteo từ trình duyệt (không cần khoá). Lỗi mạng → trời quang ----
+  const wxState = Object.assign({ city: 'hanoi', mode: 'auto', manual: 'clear', kind: 'clear', temp: null }, get('pk_demo_wx', {}));
+  const wxOut = () => { const c = RU.CITIES.find(x => x.id === wxState.city) || RU.CITIES[0]; const man = wxState.mode === 'manual'; return { kind: man ? wxState.manual : wxState.kind, temp: man ? null : wxState.temp, city: c.name, cityId: c.id, mode: wxState.mode, source: man ? 'chọn tay' : 'Open-Meteo' }; };
+  function fetchWeather() {
+    if (wxState.mode === 'manual') return emit({ t: 'weather', w: wxOut() });
+    const c = RU.CITIES.find(x => x.id === wxState.city) || RU.CITIES[0];
+    if (!window.fetch) return;
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c.lat}&longitude=${c.lon}&current=weather_code,temperature_2m&timezone=Asia%2FBangkok`)
+      .then(r => r.json()).then(j => { const cur = j.current || {}; wxState.temp = typeof cur.temperature_2m === 'number' ? Math.round(cur.temperature_2m) : null; wxState.kind = RU.weatherKind(cur.weather_code | 0, wxState.temp); emit({ t: 'weather', w: wxOut() }); })
+      .catch(() => emit({ t: 'weather', w: wxOut() }));
+  }
+  setInterval(fetchWeather, 15 * 60e3);
+  let bellG = null, chant = null;
 
   // vòng lặp bot
   let last = performance.now();
@@ -123,13 +161,10 @@ window.LocalServer = function (deliver) {
         if (!b.moving) arrive(b);
         moved.push([b.id, Math.round(b.x), Math.round(b.y), b.dir, b.moving ? 1 : 0]);
       } else if (b.tugging) { /* đang kéo co */ } else if ((b.wait -= dt) <= 0) {
-        const kinds = ['altar', 'bowl', 'garden', 'pen', 'wander', 'bell', 'shout', 'sweep', 'eat', 'shout'];
+        if (b.pose) { b.pose = ''; emit({ t: 'pose', id: b.id, pose: '' }); }
+        const kinds = ['altar', 'bowl', 'garden', 'pen', 'wander', 'bell', 'shout', 'sweep', 'eat', 'shout', 'cushion', 'fortune', 'bell'];
         const kind = kinds[Math.random() * kinds.length | 0], list = POI[kind], tgt = list[Math.random() * list.length | 0];
-        b.goal = kind; b.path = [HUB, kind === 'altar' ? [1080, 520] : HUB, [tgt[0] + (Math.random() - .5) * 30, tgt[1] + (Math.random() - .5) * 20]];
-        if (kind === 'bell' || kind === 'garden') b.path.splice(2, 0, [700, 570]);
-        if (kind === 'garden') b.path.splice(3, 0, [620, 910]);
-        if (kind === 'pen') b.path.splice(2, 0, [1380, 910]);
-        if (['shout', 'sweep', 'eat'].includes(kind)) { b.path = [[1000, b.y < 1450 ? 1300 : b.y], [1000, 1600], [1000, 1890], b.path[2]]; if (b.y > 1500) b.path.splice(0, 1); }
+        b.goal = kind; b.path = route(b, kind, tgt);
       }
     }
     if (moved.length) emit({ t: 's', p: moved });
@@ -142,12 +177,14 @@ window.LocalServer = function (deliver) {
   function arrive(b) {
     b.wait = 3 + Math.random() * 6;
     const r = Math.random();
-    if ((b.goal === 'altar' || b.goal === 'bowl') && r < .75) { emit({ t: 'emote', id: b.id, e: 'bow' }); setTimeout(() => lightIncense(b, altar[Math.random() * altar.length | 0].id, Math.random() < .8 ? WISHES[Math.random() * WISHES.length | 0] : ''), 600); }
+    if ((b.goal === 'altar' || b.goal === 'bowl') && r < .75) { emit({ t: 'emote', id: b.id, e: 'bow' }); setTimeout(() => lightIncense(b, b.goal === 'bowl' ? 'all' : altar[Math.random() * altar.length | 0].id, Math.random() < .8 ? WISHES[Math.random() * WISHES.length | 0] : ''), 600); }
+    else if (b.goal === 'cushion') { b.pose = 'sit'; b.wait = 8 + Math.random() * 8; emit({ t: 'pose', id: b.id, pose: 'sit', x: b.x, y: b.y }); }
+    else if (b.goal === 'fortune' && r < .7) emit({ t: 'emote', id: b.id, e: 'pray' });
     else if (b.goal === 'garden') {
       const pl = L.plots.map((p, i) => [p, plots[i]]).filter(([p, s]) => s.state === 'ripe').sort((a, c) => Math.hypot(a[0].x - b.x, a[0].y - b.y) - Math.hypot(c[0].x - b.x, c[0].y - b.y))[0];
       if (pl && Math.hypot(pl[0].x - b.x, pl[0].y - b.y) < 160 && r < .7) { const s = pl[1]; s.state = 'dug'; s.regrowAt = Date.now() + cfg.regrowSec * 1000; emit({ t: 'plot', plot: s, by: b.id }); }
     } else if (b.goal === 'pen' && r < .6) { const a = L.animals[Math.random() * 4 | 0]; emit({ t: 'fed', animal: a.id, by: b.id, name: b.name }); }
-    else if (b.goal === 'bell' && r < .6) emit({ t: 'bell', by: b.name });
+    else if (b.goal === 'bell' && r < .75) { if (Math.random() < .7) emit({ t: 'bell', by: b.name, id: b.id, halo: true }); else emit({ t: 'bellFart', id: b.id, by: b.name }); }
     else if (b.goal === 'shout' && r < .85) emit({ t: 'say', id: b.id, text: SHOUTS[Math.random() * SHOUTS.length | 0] });
     else if (b.goal === 'sweep') { const lf = leaves.filter(x => x.state === 'full').sort((p, q) => Math.hypot(L.leaves[p.id].x - b.x, L.leaves[p.id].y - b.y) - Math.hypot(L.leaves[q.id].x - b.x, L.leaves[q.id].y - b.y))[0]; if (lf && Math.hypot(L.leaves[lf.id].x - b.x, L.leaves[lf.id].y - b.y) < 140) { lf.state = 'swept'; lf.regrowAt = Date.now() + 45000; emit({ t: 'leaf', leaf: lf, by: b.id }); } }
     else if (b.goal === 'eat') emit({ t: 'emote', id: b.id, e: 'heart' });
@@ -158,15 +195,15 @@ window.LocalServer = function (deliver) {
   function tugTick() {
     const mt = tug.match; if (!mt) return;
     const now = Date.now();
-    if (now >= mt.startAt && now <= mt.endAt && Math.random() < mt.botRate) { mt.pos += 1; mt.changed = true; }
-    if (mt.changed) { mt.changed = false; emit({ t: 'tugPos', pos: mt.pos }); }
+    if (now >= mt.startAt && now <= mt.endAt && Math.random() < mt.botRate) { mt.pos += 1; mt.cb = (mt.cb || 0) + 1; mt.changed = true; }
+    if (mt.changed) { mt.changed = false; emit({ t: 'tugPos', pos: mt.pos, ca: mt.ca || 0, cb: mt.cb || 0 }); }
     if (Math.abs(mt.pos) >= RU.TUG.win || now > mt.endAt) endTug(mt.pos < 0 ? 'me' : mt.pos > 0 ? mt.b : null);
   }
   function endTug(winner) {
     const mt = tug.match; if (!mt) return; tug.match = null;
     const bot = bots.find(x => x.id === mt.b); if (bot) { bot.tugging = false; bot.wait = 2; }
     if (winner === 'me') prof.phuoc += mt.bet * 2; else if (!winner) prof.phuoc += mt.bet;
-    emit({ t: 'tugEnd', winner, wName: winner === 'me' ? me.name : winner ? mt.bName : '', lName: winner === 'me' ? mt.bName : winner ? me.name : '', bet: mt.bet, pos: mt.pos });
+    emit({ t: 'tugEnd', winner, wName: winner === 'me' ? me.name : winner ? mt.bName : '', lName: winner === 'me' ? mt.bName : winner ? me.name : '', bet: mt.bet, pos: mt.pos, ca: mt.ca || 0, cb: mt.cb || 0, a: 'me', b: mt.b });
     emit({ t: 'profile', profile: profile() }); emit({ t: 'tugState', tug: tugState() });
   }
   function botAccept() {
@@ -184,7 +221,7 @@ window.LocalServer = function (deliver) {
 
   return {
     demo: true,
-    config: { cfg, altar, vouchers, save() { put('pk_demo_cfg', cfg); put('pk_demo_altar', altar); put('pk_demo_vouchers', vouchers); }, reset() { prof.digsToday = 0; emit({ t: 'profile', profile: profile(), msg: 'Đã hồi lại lượt đào hôm nay' }); }, defaults: { altar: DEFAULT_ALTAR, vouchers: DEFAULT_VOUCHERS } },
+    config: { cfg, wx: () => wxState, setWx(o) { Object.assign(wxState, o); put('pk_demo_wx', { city: wxState.city, mode: wxState.mode, manual: wxState.manual }); fetchWeather(); }, altar, vouchers, save() { put('pk_demo_cfg', cfg); put('pk_demo_altar', altar); put('pk_demo_vouchers', vouchers); }, reset() { prof.digsToday = 0; prof.dd = null; emit({ t: 'profile', profile: profile(), msg: 'Đã hồi lại lượt đào, chuông, quẻ hôm nay' }); }, defaults: { altar: DEFAULT_ALTAR, vouchers: DEFAULT_VOUCHERS } },
     send(m) {
       switch (m.t) {
         case 'hello': {
@@ -193,19 +230,61 @@ window.LocalServer = function (deliver) {
           profKey = 'pk_demo_profile_' + acc.pid; prof = Object.assign({ phuoc: 20, rau: 0, digDay: '', digsToday: 0, wins: [] }, get(profKey, {}));
           ensureAcc(acc); saveAccount(acc);
           me = { id: 'me', name: acc.name, color: acc.color, hat: acc.hat, hair: acc.hair, x: L.spawn.x, y: L.spawn.y, dir: 1, lastIncense: 0, lastSay: 0 };
-          emit({ t: 'welcome', you: pub(me), room: { id: 'chua-1', name: 'Chùa 1', num: 1, capacity: 30 }, players: bots.map(pub), plots, incense, altar, templeName: 'Chùa Tổ Nghiệp Designer', shopUrl: 'https://piklab.vn', profile: profile(), pid: 'demo', rooms: rooms(), serverTime: Date.now(), regrowSec: cfg.regrowSec, demo: true, leaves, leafRegrowSec: 45, tug: tugState(), prices });
+          emit({ t: 'welcome', you: pub(me), room: { id: 'chua-1', name: 'Chùa 1', num: 1, capacity: 30 }, players: bots.map(pub), plots, incense, altar, templeName: 'Chùa Tổ Nghiệp Designer', shopUrl: 'https://piklab.vn', profile: profile(), pid: 'demo', rooms: rooms(), serverTime: Date.now(), regrowSec: cfg.regrowSec, demo: true, leaves, leafRegrowSec: 45, tug: tugState(), prices, weather: wxOut() });
+          fetchWeather();
           setTimeout(() => lightIncense(bots[1], 'ps', 'Khách duyệt bản đầu tiên'), 2500);
           break;
         }
-        case 'move': me.x = m.x; me.y = m.y; break;
+        case 'move': me.x = m.x; me.y = m.y; if (m.moving && chant) { chant = null; emit({ t: 'pose', id: 'me', pose: '' }); } break;
         case 'emote': emit({ t: 'emote', id: 'me', e: m.e }); break;
-        case 'bell': if (!RU.useStamina(prof, RU.COST.bell, Date.now())) return tired(); emit({ t: 'bell', by: me.name }); emit({ t: 'profile', profile: profile() }); break;
+        case 'bellStart': {
+          const d = dd(), now = Date.now();
+          if (!near(me, L.bell, L.bell.radius + 60)) return;
+          if (d.bell >= BELL_PER_DAY) return emit({ t: 'bellNo', msg: `Hôm nay bạn đã thỉnh đủ ${BELL_PER_DAY} hồi chuông rồi. Mai quay lại nhé 🔔` });
+          if (!RU.useStamina(prof, RU.COST.bell, now)) return tired();
+          d.bell++; const period = RU.BELL.period(d.bellHits); bellG = { t0: now + RU.BELL.countdown, period };
+          emit({ t: 'bellGo', countdown: RU.BELL.countdown, period, zone: RU.BELL.zone, profile: profile() });
+          break;
+        }
+        case 'bellHit': {
+          const g = bellG; if (!g) return; bellG = null;
+          const d = dd(), srv = Date.now() - g.t0, e = +m.e, ok = e >= 0 && e <= srv + 60 && e >= srv - 900;
+          const pos = ok ? RU.bellPos(e, g.period) : 0, hit = ok && Math.abs(pos - .5) <= RU.BELL.zone / 2;
+          if (hit) { d.bellHits++; prof.phuoc += prices.bellReward; emit({ t: 'bell', by: me.name, id: 'me', halo: true }); emit({ t: 'bellResult', hit: true, pos, gain: prices.bellReward, profile: profile() }); }
+          else { const loss = Math.min(prof.phuoc, prices.bellPenalty); prof.phuoc -= loss; emit({ t: 'bellFart', id: 'me', by: me.name }); emit({ t: 'bellResult', hit: false, pos, loss, profile: profile() }); }
+          break;
+        }
+        case 'chantStart': {
+          const kind = m.kind === 'beads' ? 'beads' : 'mo', c = L.cushions.find(c => near(me, c, L.cushionRadius + 40)); if (!c) return;
+          if (dd()[kind] >= RU.CHANT[kind].perDay) return emit({ t: 'toast', msg: 'Hôm nay đủ lượt rồi 🙏' });
+          chant = { kind, t: Date.now() }; emit({ t: 'pose', id: 'me', pose: 'sit' });
+          break;
+        }
+        case 'chantEnd': {
+          const ch = chant; chant = null; emit({ t: 'pose', id: 'me', pose: '' });
+          if (!ch || !m.done) return;
+          const R = RU.CHANT[ch.kind], d = dd();
+          if (Date.now() - ch.t < R.minMs || (m.n | 0) < R.every || d[ch.kind] >= R.perDay) return emit({ t: 'toast', msg: 'Tâm chưa tĩnh, lượt này chưa được tính 🙏' });
+          if (!RU.useStamina(prof, RU.COST.chant, Date.now())) return tired();
+          d[ch.kind]++; prof.phuoc += prices.chant; emit({ t: 'emote', id: 'me', e: 'zen' });
+          emit({ t: 'profile', profile: profile(), msg: (ch.kind === 'mo' ? 'Tụng xong một thời kinh' : 'Lần trọn một chuỗi tràng hạt') + ` · +${prices.chant} phước 🪷` });
+          break;
+        }
+        case 'fortuneAccept': {
+          const d = dd(), i = (m.no | 0) - 1; if (d.acc || !d.fq.includes(i)) return;
+          d.acc = { no: i + 1, text: fortunes[i] || '' };
+          emit({ t: 'profile', profile: profile(), msg: `Đã đón nhận quẻ số ${i + 1} · áp dụng cả ngày hôm nay 🏮` });
+          break;
+        }
         case 'incense': {
           if (Date.now() - me.lastIncense < 5000) return emit({ t: 'toast', msg: 'Nhang vừa thắp, hãy tĩnh tâm một chút rồi thắp tiếp nhé 🙏' });
+          const atBowl = near(me, L.bowl, L.bowl.radius + 60), atAltar = near(me, L.altar, L.altar.radius + 60);
+          if (!atBowl && !atAltar) return;
           if (!RU.useStamina(prof, RU.COST.incense, Date.now())) return tired();
-          me.lastIncense = Date.now(); lightIncense(me, m.app, String(m.wish || '').slice(0, 70));
-          prof.phuoc += 3; const app = altar.find(a => a.id === m.app) || altar[0];
-          emit({ t: 'profile', profile: profile(), msg: `+3 phước · Tổ ${app.name} đã chứng giám` });
+          const appId = atBowl && !atAltar ? 'all' : m.app === 'all' ? altar[0].id : m.app;
+          me.lastIncense = Date.now(); lightIncense(me, appId, String(m.wish || '').slice(0, 70));
+          prof.phuoc += 3; const app = altar.find(a => a.id === appId);
+          emit({ t: 'profile', profile: profile(), msg: app ? `+3 phước · Tổ ${app.name} đã chứng giám` : '+3 phước · Chư vị Tổ Nghiệp đã chứng giám 🙏' });
           break;
         }
         case 'dig': {
@@ -245,9 +324,14 @@ window.LocalServer = function (deliver) {
           break;
         }
         case 'fortune': {
-          if (prof.phuoc < prices.fortune) return emit({ t: 'toast', msg: `Gieo quẻ cần ${prices.fortune} phước.` });
+          const d = dd();
+          if (d.acc) return emit({ t: 'toast', msg: `Hôm nay bạn đã đón nhận quẻ số ${d.acc.no} rồi 🙏` });
+          if (d.fq.length >= FORTUNE_PER_DAY) return emit({ t: 'fortunePick', profile: profile() });
+          if (prof.phuoc < prices.fortune) return emit({ t: 'toast', msg: `Xin quẻ cần ${prices.fortune} phước.` });
           if (!RU.useStamina(prof, RU.COST.fortune, Date.now())) return tired();
-          prof.phuoc -= prices.fortune; const i = Math.random() * fortunes.length | 0;
+          prof.phuoc -= prices.fortune; let i = Math.random() * fortunes.length | 0;
+          for (let k = 0; k < 6 && d.fq.includes(i); k++) i = Math.random() * fortunes.length | 0;
+          d.fq.push(i);
           emit({ t: 'fortune', no: i + 1, text: fortunes[i], profile: profile() });
           break;
         }
@@ -301,8 +385,9 @@ window.LocalServer = function (deliver) {
         }
         case 'tugCancel': tug.offers = []; emit({ t: 'tugState', tug: tugState() }); break;
         case 'tug': {
-          const mt = tug.match, now = Date.now(); if (!mt || now < mt.startAt || now > mt.endAt) return;
-          if (now - (mt.last || 0) < 45) return; mt.last = now; mt.pos -= 1; mt.changed = true;
+          const mt = tug.match, now = Date.now(); if (!mt) return;
+          if (now < mt.startAt - 150 || now > mt.endAt + RU.TUG.grace) return;
+          if (now - (mt.last || 0) < RU.TUG.minGap) return; mt.last = now; mt.pos -= 1; mt.ca = (mt.ca || 0) + 1; mt.changed = true;
           break;
         }
       }
