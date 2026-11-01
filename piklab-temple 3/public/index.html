@@ -22,6 +22,8 @@
   </div>
   <div class="hud-tr">
     <button id="clockBtn" class="chip glass btn" title="Ánh sáng theo giờ Việt Nam · bấm để xem thử các khung giờ">☀️</button>
+    <button id="wxBtn" class="chip glass btn" title="Thời tiết theo dự báo thật · bấm để xem thử">⛅</button>
+    <button id="qBtn" class="chip glass btn hidden" title="Quẻ bạn đã đón nhận hôm nay">🏮 <b id="qNo">Quẻ</b></button>
     <div class="chip glass" title="Điểm phước">🍀 <b id="phuoc">0</b></div>
     <div class="chip glass stam" title="Sinh lực — hết thì ra Quán Ăn Vỉa Hè ăn bát phở">💪 <span class="sbar"><i id="stBar"></i></span><b id="st">100</b></div>
     <div class="chip glass" title="Bó rau trong túi">🥬 <b id="rau">0</b></div>
@@ -103,8 +105,8 @@
 <div id="incenseModal" class="modal-wrap hidden">
   <div class="card">
     <button class="x" data-close>✕</button>
-    <h2>🪔 Thắp hương tổ nghiệp</h2>
-    <p class="muted">Chọn vị tổ bạn muốn cầu</p>
+    <h2 id="incTitle">🪔 Thắp hương tổ nghiệp</h2>
+    <p class="muted" id="incSub">Chọn vị tổ bạn muốn cầu</p>
     <div id="appGrid" class="app-grid"></div>
     <label>Lời nguyện (mọi người trong chùa sẽ thấy)</label>
     <input id="wishInput" maxlength="70" placeholder="Cầu cho khách duyệt bản đầu tiên…">
@@ -112,6 +114,12 @@
     <button id="lightBtn" class="primary">Thắp hương</button>
   </div>
 </div>
+
+<!-- Minigame 2D (thỉnh chuông, gõ mõ, tràng hạt) — cảnh 3D phía sau tạm vẽ chậm lại -->
+<div id="mgModal" class="modal-wrap hidden">
+  <div class="card mg" id="mgCard"></div>
+</div>
+<div id="wxLayer"></div>
 
 <!-- Kết quả đào -->
 <div id="resultModal" class="modal-wrap hidden">
@@ -153,7 +161,7 @@
   <div class="card">
     <button class="x" data-close>✕</button>
     <h2>🪢 Sân Kéo Co</h2>
-    <p class="muted">Đấu 1-1: ai bấm <kbd>Ctrl</kbd>+<kbd>Z</kbd> (Mac: <kbd>⌘</kbd>+<kbd>Z</kbd>) nhanh hơn sẽ kéo được dây và lấy phần phước đối thủ cược. Trò giải trí, không quy đổi ra tiền.</p>
+    <p class="muted">Đấu 1-1: ai bấm <kbd>Ctrl</kbd>+<kbd>Z</kbd> (hoặc chỉ <kbd>Z</kbd>, <kbd>Space</kbd>, nút KÉO) nhanh hơn sẽ kéo được dây và lấy phần phước đối thủ cược. Trò giải trí, không quy đổi ra tiền.</p>
     <div id="tugBody"></div>
   </div>
 </div>
@@ -161,7 +169,8 @@
   <div class="tug-names"><b id="tugA">A</b><span id="tugBet">cược 10</span><b id="tugB">B</b></div>
   <div class="tug-bar"><i id="tugKnot"></i><span class="mid"></span></div>
   <div id="tugMsg">3</div>
-  <button id="tugBtn">⌃Z / ⌘Z · KÉO!</button>
+  <div id="tugCount" class="tug-count"></div>
+  <button id="tugBtn">Ctrl+Z · Z · Space — KÉO!</button>
 </div>
 
 <!-- Bãi khẩu nghiệp -->
