@@ -50,7 +50,7 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5p
 @keyframes breathe { 50% { box-shadow: 0 8px 40px rgba(240, 180, 70, .75), inset 0 -3px 0 rgba(0,0,0,.15); } }
 #minimap { right: 12px; bottom: max(14px, env(safe-area-inset-bottom)); border-radius: 12px; width: 150px; height: auto; cursor: pointer; }
 #hint { left: 50%; top: max(60px, calc(env(safe-area-inset-top) + 50px)); transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; font-size: 12.5px; transition: opacity 1s; white-space: nowrap; }
-#ticker { left: 50%; top: max(12px, env(safe-area-inset-top)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
+#ticker { left: 50%; top: calc(max(12px, env(safe-area-inset-top)) + 52px); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 6px; pointer-events: none; }
 #ticker .t { background: rgba(140, 43, 30, .85); border: 1px solid rgba(255,210,140,.35); padding: 7px 14px; border-radius: 999px; font-size: 13px; animation: tin .4s ease-out; }
 @keyframes tin { from { opacity: 0; transform: translateY(-8px); } }
 
@@ -116,9 +116,9 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5p
   .emote { width: 36px; height: 36px; font-size: 17px; }
   .hud-bl { bottom: 84px; }
   #hint { display: none; }
-  #ticker { top: 96px; width: 92vw; }
+  #ticker { top: 128px; width: 92vw; }
   #ticker .t { font-size: 12px; text-align: center; }
-  .hud-tr { max-width: 58vw; }
+  .hud-tr { max-width: 54vw; }
   .app-grid { grid-template-columns: repeat(4, 1fr); }
   .card h1 { font-size: 24px; }
 }
@@ -248,3 +248,52 @@ kbd { font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5p
 /* Tắt hiệu ứng làm mờ kính (tốn GPU vì phải tính lại mỗi khung hình) ở mức Cân bằng / Tiết kiệm */
 body.noblur .glass { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(30, 22, 14, .84); }
 body.noblur .modal-wrap { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(12, 8, 4, .66); }
+
+/* ---------- Đợt 1: minigame 2D, thời tiết, quẻ ---------- */
+#wxLayer { position: fixed; inset: 0; pointer-events: none; z-index: 3; transition: background 2s; }
+#wxLayer.fog { background: radial-gradient(130% 90% at 50% 60%, rgba(225,228,232,.08) 0%, rgba(214,219,224,.5) 100%); }
+#wxLayer.flash { background: rgba(235,240,255,.55); transition: none; }
+.card.mg { width: min(480px, 100%); text-align: center; }
+.card.mg .big { font-size: 46px; line-height: 1; margin-bottom: 6px; }
+.mg-bar { position: relative; height: 34px; border-radius: 17px; margin: 18px 4px 10px; background: linear-gradient(90deg, #6b3b23, #a8673a 45%, #a8673a 55%, #6b3b23); box-shadow: inset 0 2px 6px rgba(0,0,0,.45); overflow: hidden; }
+.mg-bar .zone { position: absolute; top: 0; bottom: 0; background: linear-gradient(180deg, #ffe08a, #f2b437); box-shadow: 0 0 18px #ffd56b; }
+.mg-bar .needle { position: absolute; top: -4px; bottom: -4px; width: 6px; margin-left: -3px; border-radius: 3px; background: #fffaf0; box-shadow: 0 0 0 2px #3a1d08, 0 0 12px #fff; }
+.mg-big-btn { display: block; width: 100%; margin-top: 12px; padding: 16px; border: 0; border-radius: 16px; font: 800 18px "Be Vietnam Pro", sans-serif; color: #3a1d08; background: linear-gradient(180deg, #ffd56b, #e8a83a); box-shadow: 0 6px 0 #9b6420; cursor: pointer; touch-action: manipulation; }
+.mg-big-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #9b6420; }
+.mg-big-btn:disabled { filter: grayscale(.6); opacity: .7; }
+.mg-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.mg-choice button { padding: 16px 10px; border-radius: 16px; border: 1.5px solid #e1cba3; background: #fffaf0; font: 600 14px "Be Vietnam Pro", sans-serif; color: var(--ink); cursor: pointer; }
+.mg-choice button b { display: block; font-size: 30px; margin-bottom: 6px; }
+.mg-choice button small { display: block; color: #8a6a45; font-weight: 500; margin-top: 4px; }
+.mg-choice button:disabled { opacity: .5; }
+.mo-stage { position: relative; height: 210px; display: grid; place-items: center; margin: 6px 0; cursor: pointer; touch-action: manipulation; user-select: none; }
+.mo-out, .mo-in { position: absolute; left: 50%; top: 50%; border-radius: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+.mo-out { width: 176px; height: 176px; border: 4px solid #c0392b; box-shadow: 0 0 0 3px rgba(192,57,43,.15); }
+.mo-in { width: 70px; height: 70px; border: 4px solid #e8a83a; background: rgba(255,214,107,.18); }
+.mo-in.near { border-color: #ffcf3a; box-shadow: 0 0 18px #ffd56b; }
+.mo-wood { position: relative; width: 112px; height: 103px; transition: transform .08s; z-index: 1; }
+.mo-wood svg, .mo-ic svg { width: 100%; height: 100%; display: block; }
+.mo-wood.hit { transform: scale(.92) translateY(3px); }
+.mo-ic { display: block; width: 46px; height: 42px; margin: 0 auto 6px; }
+.mo-dui { position: absolute; left: calc(50% + 18px); top: 22px; width: 92px; height: 40px; z-index: 2; transform-origin: 85% 50%; transform: rotate(-28deg); }
+.mo-dui svg { width: 100%; height: 100%; }
+.mo-dui.hit { animation: dui .22s ease-out; }
+@keyframes dui { 0% { transform: rotate(-28deg); } 35% { transform: rotate(8deg); } 100% { transform: rotate(-28deg); } }
+.mo-fx { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); font: 800 18px "Be Vietnam Pro", sans-serif; opacity: 0; transition: opacity .15s; z-index: 3; }
+.mo-fx.ok { opacity: 1; color: #2f7d4a; } .mo-fx.bad { opacity: 1; color: #b0402a; }
+.sutra { min-height: 46px; font-family: "Noto Serif", serif; font-size: 16px; color: #6a3a1c; }
+.sutra .on { color: var(--red); font-weight: 700; }
+.beads-wrap { position: relative; width: 210px; height: 244px; margin: 10px auto 0; touch-action: none; }
+.beads { position: absolute; left: 0; top: 0; width: 210px; height: 210px; transition: transform .35s ease-out; }
+.beads i { position: absolute; width: 18px; height: 18px; margin: -9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #c98a52, #6b3a1c); box-shadow: 0 1px 2px rgba(0,0,0,.4); transition: background .2s; }
+.beads i.done { background: radial-gradient(circle at 35% 30%, #ffe7a3, #d7962f); box-shadow: 0 0 8px #ffd56b; }
+.beads-wrap .breath { position: absolute; left: 60px; top: 60px; width: 90px; height: 90px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; color: #7a5a35; background: rgba(255,240,205,.7); }
+.beads-wrap .breath.warn { color: #b0402a; font-weight: 700; }
+.bead-hand { position: absolute; left: 50%; top: 204px; transform: translateX(-50%); font-size: 28px; }
+.q-list { text-align: left; margin: 12px 0; display: grid; gap: 8px; }
+.q-item { border: 1.5px solid #e1cba3; border-radius: 14px; padding: 10px 12px; background: #fffaf0; }
+.q-item b { color: var(--red); }
+.q-item p { margin: 4px 0 8px; font-family: "Noto Serif", serif; font-size: 15px; line-height: 1.4; }
+.q-item.on { border-color: #e8a83a; box-shadow: 0 0 0 3px rgba(232,168,58,.25); }
+.tuvi { margin-top: 10px; width: 100%; padding: 12px; border-radius: 14px; border: 1.5px dashed #c9a46a; background: transparent; color: #8a6a45; font: 600 13px "Be Vietnam Pro", sans-serif; cursor: not-allowed; }
+.tug-count { font-size: 13px; color: #e9d6b0; margin-top: 2px; }
