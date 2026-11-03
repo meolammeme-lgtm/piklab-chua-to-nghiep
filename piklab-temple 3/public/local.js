@@ -28,7 +28,7 @@ const h32 = str => { let h = 2166136261; for (let i = 0; i < str.length; i++) { 
 window.LocalAuth = function (kind, b) {
   const accs = get('pk_demo_accounts', {}), sess = get('pk_demo_sessions', {});
   const email = String(b.email || '').trim().toLowerCase();
-  const pubA = a => ({ name: a.name, color: a.color, hat: a.hat, hair: a.hair || 'bun' });
+  const pubA = a => ({ name: a.name, color: a.color, hat: a.hat, hair: a.hair || 'bun', outfit: a.outfit || 'trang' });
   const session = a => { const t = Math.random().toString(36).slice(2) + Date.now().toString(36); sess[t] = a.email; put('pk_demo_sessions', sess); return t; };
   if (kind === 'register') {
     const name = String(b.name || '').replace(/[<>]/g, '').trim().slice(0, 18);
@@ -55,7 +55,9 @@ const saveAccount = a => { const accs = get('pk_demo_accounts', {}); accs[a.emai
 function ensureAcc(a) {
   if (!a.hair) { a.hair = a.hat === 'bald' ? 'bald' : 'bun'; if (a.hat === 'bald') a.hat = 'none'; }
   if (!RU.HATS.some(h => h.id === a.hat)) a.hat = 'none';
+  if (!RU.OUTFITS.some(o => o.id === a.outfit)) a.outfit = 'trang';
   a.items = a.items || { hats: [], colors: [] };
+  a.items.outfits = [...new Set([...RU.OUTFITS.filter(o => !o.price).map(o => o.id), ...(a.items.outfits || []), a.outfit])];
   a.items.hats = [...new Set([...RU.HATS.filter(h => !h.price).map(h => h.id), ...a.items.hats, a.hat])];
   a.items.colors = [...new Set([...RU.COLORS.filter(c => !c.price).map(c => c.id), ...a.items.colors, a.color])];
   return a;
@@ -64,8 +66,8 @@ const SHOUTS = ['Khách ơi đừng sửa nữa mà!!!', 'Ai đặt tên layer l
 
 const WISHES = ['Khách duyệt bản đầu tiên', 'Render không crash', 'Deadline lùi 1 tuần', 'In ra đúng màu', 'Không bị “logo to hơn”', 'File không corrupt', 'Lương về đúng hẹn', 'Font không lỗi'];
 const BOTS = [
-  ['Thích Kéo Layer', '#7a5a43', 'bald'], ['Thích Căn Lề', '#6f7d8c', 'khan'], ['Thích Pen Tool', '#c9902e', 'bald'],
-  ['Thích Keyframe', '#3b4f7a', 'none'], ['Thích Gradient', '#efe7d6', 'non']
+  ['Thích Kéo Layer', '#7a5a43', 'bald'], ['Thích Căn Lề', '#6f7d8c', 'khan', 'nguthan'], ['Thích Pen Tool', '#c9902e', 'bald'],
+  ['Thích Keyframe', '#3b4f7a', 'none', 'aodai', 'long'], ['Thích Gradient', '#efe7d6', 'non', 'baba', 'braid']   // [pháp danh, màu áo, mũ, kiểu áo, kiểu tóc]
 ];
 const MKT = L.market, GY = L.GATE_Y, AX = L.altar.x;
 const POI = {
@@ -73,16 +75,16 @@ const POI = {
   garden: L.plots.map(p => [p.x, p.y + 40]), pen: [[L.pen.x + 160, L.pen.y + 420], [L.pen.x + 380, L.pen.y + 450], [L.pen.x + 300, L.pen.y + 560], [L.pen.x + 520, L.pen.y + 480]],
   bell: [[L.bell.x, L.bell.y + 130], [L.bell.x + 110, L.bell.y + 120]], fortune: [[MKT.fortune.x, MKT.fortune.y + 135], [MKT.fortune.x - 90, MKT.fortune.y + 140]], cushion: L.cushions.map(c => [c.x, c.y]),
   wander: [[1100, 900], [1700, 1000], [1250, 1200], [1600, 780], [1000, 760], [1850, 1150], [1400, 1650]],
-  shout: [[MKT.shout.x - 80, MKT.shout.y], [MKT.shout.x + 60, MKT.shout.y + 60], [MKT.shout.x, MKT.shout.y - 90]], sweep: L.leaves.map(l => [l.x, l.y + 40]), eat: [[MKT.food.x - 140, MKT.food.y + 45], [MKT.food.x, MKT.food.y + 45], [MKT.food.x + 140, MKT.food.y + 130]]
+  shout: [[900, 2620], [1700, 2620], [2100, 3100], [700, 3100]], fish: [[L.release.x - 30, L.release.y - 20], [L.release.x + 30, L.release.y - 30]], samhoi: [[L.samhoi.x - 60, L.samhoi.y + 110], [L.samhoi.x + 80, L.samhoi.y + 120]], cau: L.cauSeats.map(s => [s.x, s.y]), pentool: [[MKT.thayDo.x - 60, MKT.thayDo.y + 150]], sweep: L.leaves.map(l => [l.x, l.y + 40]), eat: [[MKT.food.x - 140, MKT.food.y + 45], [MKT.food.x, MKT.food.y + 45], [MKT.food.x + 140, MKT.food.y + 130]]
 };
 const HUB = [L.gate.x - 140, 1120];   // né lư hương giữa sân
-const MARKET_KINDS = ['shout', 'sweep', 'eat'];
+const MARKET_KINDS = ['shout', 'sweep', 'eat', 'fish', 'pentool', 'cau'];
 // tuyến đi cho bot: luôn đi qua trục chính và cổng chùa
 function route(b, kind, tgt) {
   const path = [], inMkt = b.y > GY, toMkt = MARKET_KINDS.includes(kind);
-  if (inMkt && toMkt) { path.push([L.gate.x, 2620], [tgt[0], 2620]); }
+  if (inMkt && toMkt) { path.push([L.gate.x, Math.max(2620, Math.min(3190, b.y))], [kind === 'fish' ? L.gate.x : tgt[0], kind === 'fish' ? 3190 : 2620]); }
   else if (inMkt) { path.push([L.gate.x, Math.min(2620, b.y)], [L.gate.x, GY + 120], [L.gate.x, GY - 150], [L.gate.x, 1250], HUB); }
-  else if (toMkt) { path.push(HUB, [L.gate.x, 1250], [L.gate.x, GY - 150], [L.gate.x, GY + 120], [L.gate.x, 2620], [tgt[0], 2620]); }
+  else if (toMkt) { path.push(HUB, [L.gate.x, 1250], [L.gate.x, GY - 150], [L.gate.x, GY + 120], [L.gate.x, 2620], [kind === 'fish' ? L.gate.x : tgt[0], kind === 'fish' ? 3190 : 2620]); }
   else path.push(HUB);
   if (!toMkt) {
     if (kind === 'altar' || kind === 'cushion') path.push([HUB[0], 760], [AX, 700], [AX, 640]);
@@ -91,11 +93,19 @@ function route(b, kind, tgt) {
     if (kind === 'garden') path.push([1100, 1490], [L.garden.x + L.garden.w + 40, 1490], [L.garden.x + L.garden.w - 60, 1490]);
     if (kind === 'pen') path.push([1700, 1490], [L.pen.x - 40, 1490], [L.pen.x + 80, 1490]);
   }
-  path.push([tgt[0] + (kind === 'cushion' ? 0 : (Math.random() - .5) * 30), tgt[1] + (kind === 'cushion' ? 0 : (Math.random() - .5) * 20)]);
+  if (kind === 'cau') path.push([tgt[0], 3195]);   // đi dọc đường ven sông rồi ra ghế câu
+  path.push([tgt[0] + (kind === 'cushion' || kind === 'cau' ? 0 : (Math.random() - .5) * 30), tgt[1] + (kind === 'cushion' || kind === 'cau' ? 0 : (Math.random() - .5) * 20)]);
   return path;
 }
 const dayVN = () => new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10);
 
+const SH_SEED = ['Con xin sám hối vì đặt tên file là final_final_v9_thatsu_final.psd', 'Con đã nói “5 phút nữa xong” lúc 9 giờ tối. Bây giờ là 3 giờ sáng.', 'Con lấy Comic Sans làm font tạm rồi quên đổi, khách in 2.000 tờ rơi.', 'Con đã Ctrl+S đè lên file gốc của cả team.', 'Con tăng size logo 10% rồi gửi lại, khách khen “đúng rồi đó em”.', 'Con chưa từng đặt tên layer trong đời.'];
+function samhoiAll() {
+  let l = get('pk_demo_samhoi', null);
+  if (!l) { l = SH_SEED.map((text, i) => ({ id: 's' + i, text, t: Date.now() - (i * 5 + 2) * 3600e3, n: 20 + ((i * 37) % 150), mine: false, prayed: false })); put('pk_demo_samhoi', l); }
+  return l.filter(x => Date.now() - x.t < RU.SAMHOI.ttl);
+}
+const putSh = l => put('pk_demo_samhoi', l);
 window.LocalServer = function (deliver) {
   const emit = m => setTimeout(() => deliver(m), 0);
   const cfg = Object.assign({ digsPerDay: 5, regrowSec: 40 }, get('pk_demo_cfg', {}));
@@ -104,26 +114,26 @@ window.LocalServer = function (deliver) {
   let profKey = 'pk_demo_profile', prof = { phuoc: 20, rau: 0, digDay: '', digsToday: 0, wins: [] }, acc = null;
   const day = dayVN;
   const BELL_PER_DAY = 5, FORTUNE_PER_DAY = 3;
-  const dd = () => { if (!prof.dd || prof.dd.day !== day()) prof.dd = { day: day(), bell: 0, bellHits: 0, fq: [], acc: null, mo: 0, beads: 0 }; return prof.dd; };
-  const todayOut = () => { const d = dd(); return { bellLeft: Math.max(0, BELL_PER_DAY - d.bell), fortuneLeft: d.acc ? 0 : Math.max(0, FORTUNE_PER_DAY - d.fq.length), drawn: d.fq.map(i => ({ no: i + 1, text: fortunes[i] || '' })), accepted: d.acc, moLeft: Math.max(0, RU.CHANT.mo.perDay - d.mo), beadsLeft: Math.max(0, RU.CHANT.beads.perDay - d.beads) }; };
+  const dd = () => { if (!prof.dd || prof.dd.day !== day()) prof.dd = { day: day(), bell: 0, bellHits: 0, fq: [], acc: null, mo: 0, beads: 0, fish: 0, pen: 0, sh: 0, pray: 0 }; return prof.dd; };
+  const todayOut = () => { const d = dd(); return { bellLeft: Math.max(0, BELL_PER_DAY - d.bell), fortuneLeft: d.acc ? 0 : Math.max(0, FORTUNE_PER_DAY - d.fq.length), drawn: d.fq.map(i => ({ no: i + 1, text: fortunes[i] || '' })), accepted: d.acc, moLeft: Math.max(0, RU.CHANT.mo.perDay - d.mo), beadsLeft: Math.max(0, RU.CHANT.beads.perDay - d.beads), fishLeft: Math.max(0, RU.FISH_RULES.perDay - (d.fish || 0)), cauLeft: Math.max(0, RU.CAU.perDay - (d.cau || 0)), penLeft: Math.max(0, RU.PEN.perDay - (d.pen || 0)), samhoiLeft: Math.max(0, RU.SAMHOI.perDay - (d.sh || 0)) }; };
   const profile = () => {
     if (prof.digDay !== day()) { prof.digDay = day(); prof.digsToday = 0; }
     put(profKey, prof);
     const st = RU.stamina(prof, Date.now()); put(profKey, prof);
-    return { phuoc: prof.phuoc, rau: prof.rau, digsLeft: Math.max(0, cfg.digsPerDay - prof.digsToday), digsPerDay: cfg.digsPerDay, wins: prof.wins, st, stMax: RU.STAMINA_MAX, today: todayOut(), look: acc ? { color: acc.color, hat: acc.hat, hair: acc.hair } : {}, items: acc ? acc.items : { hats: [], colors: [] } };
+    return { phuoc: prof.phuoc, rau: prof.rau, digsLeft: Math.max(0, cfg.digsPerDay - prof.digsToday), digsPerDay: cfg.digsPerDay, wins: prof.wins, st, stMax: RU.STAMINA_MAX, today: todayOut(), penLesson: prof.penLesson || 0, briefs: prof.briefs || {}, fishBag: prof.fishBag || {}, look: acc ? { color: acc.color, hat: acc.hat, hair: acc.hair, outfit: acc.outfit } : {}, items: acc ? acc.items : { hats: [], colors: [], outfits: [] } };
   };
   const plots = L.plots.map(p => ({ id: p.id, state: 'ripe', regrowAt: 0 }));
   const leaves = L.leaves.map(l => ({ id: l.id, state: 'full', regrowAt: 0 }));
-  const prices = { fortune: 5, shout: 1, sweep: 2, bellReward: 3, bellPenalty: 1, chant: 2 }, fortunes = get('pk_demo_fortunes', null) || RU.DEFAULT_FORTUNES;
+  const prices = { fortune: 5, shout: 1, sweep: 2, bellReward: 3, bellPenalty: 1, chant: 2, penReward: RU.PEN.reward, samhoi: RU.SAMHOI.price, fishPerDay: RU.FISH_RULES.perDay }, fortunes = get('pk_demo_fortunes', null) || RU.DEFAULT_FORTUNES;
   const tug = { offers: [], match: null };
   const tugState = () => ({ offers: tug.offers, match: tug.match && { a: tug.match.a, b: tug.match.b, aName: tug.match.aName, bName: tug.match.bName, bet: tug.match.bet, pos: tug.match.pos, startAt: tug.match.startAt, endAt: tug.match.endAt } });
   const tired = () => emit({ t: 'tired', profile: profile() });
-  const look = () => { saveAccount(acc); me.color = acc.color; me.hat = acc.hat; me.hair = acc.hair; emit({ t: 'look', id: 'me', color: acc.color, hat: acc.hat, hair: acc.hair }); };
+  const look = () => { saveAccount(acc); me.color = acc.color; me.hat = acc.hat; me.hair = acc.hair; me.outfit = acc.outfit; emit({ t: 'look', id: 'me', color: acc.color, hat: acc.hat, hair: acc.hair, outfit: acc.outfit }); };
   const M = L.market;
   let incense = [], me = null;
-  const bots = BOTS.map(([name, color, hat], i) => ({ id: 'bot' + i, name, color, hat: hat === 'bald' ? 'none' : hat, hair: hat === 'bald' ? 'bald' : 'bun', x: L.gate.x + (i - 2) * 70, y: 1150 - i * 40, dir: 1, moving: false, path: [], wait: 1 + i * 1.5, goal: null }));
+  const bots = BOTS.map(([name, color, hat, outfit, hair], i) => ({ id: 'bot' + i, name, color, hat: hat === 'bald' ? 'none' : hat, hair: hat === 'bald' ? 'bald' : hair || 'bun', outfit: outfit || 'trang', x: L.gate.x + (i - 2) * 70, y: 1150 - i * 40, dir: 1, moving: false, path: [], wait: 1 + i * 1.5, goal: null }));
   const rooms = () => [{ id: 'chua-1', name: 'Chùa 1', num: 1, online: bots.length + 1, capacity: 30 }];
-  const pub = b => ({ id: b.id, name: b.name, color: b.color, hat: b.hat, hair: b.hair, x: b.x, y: b.y, dir: b.dir, moving: b.moving, pose: b.pose || '' });
+  const pub = b => ({ id: b.id, name: b.name, color: b.color, hat: b.hat, hair: b.hair, outfit: b.outfit, x: b.x, y: b.y, dir: b.dir, moving: b.moving, pose: b.pose || '', seat: b.seat });
   const near = (a, b, r) => Math.hypot(a.x - b.x, a.y - b.y) < r;
   const code = prefix => prefix + '-' + Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.random() * 32 | 0]).join('');
 
@@ -159,10 +169,11 @@ window.LocalServer = function (deliver) {
         if (d <= sp) { b.x = tx; b.y = ty; b.path.shift(); } else { b.x += dx / d * sp; b.y += dy / d * sp; b.dir = dx >= 0 ? 1 : -1; }
         b.moving = b.path.length > 0;
         if (!b.moving) arrive(b);
+        else if (Math.random() < .0012) emit({ t: 'say', id: b.id, text: SHOUTS[Math.random() * SHOUTS.length | 0] });   // vừa đi vừa khẩu nghiệp
         moved.push([b.id, Math.round(b.x), Math.round(b.y), b.dir, b.moving ? 1 : 0]);
       } else if (b.tugging) { /* đang kéo co */ } else if ((b.wait -= dt) <= 0) {
-        if (b.pose) { b.pose = ''; emit({ t: 'pose', id: b.id, pose: '' }); }
-        const kinds = ['altar', 'bowl', 'garden', 'pen', 'wander', 'bell', 'shout', 'sweep', 'eat', 'shout', 'cushion', 'fortune', 'bell'];
+        if (b.pose) { b.pose = ''; b.seat = null; emit({ t: 'pose', id: b.id, pose: '' }); }
+        const kinds = ['altar', 'bowl', 'garden', 'pen', 'wander', 'bell', 'shout', 'sweep', 'eat', 'cushion', 'fortune', 'bell', 'fish', 'samhoi', 'pentool', 'cau', 'cau'];
         const kind = kinds[Math.random() * kinds.length | 0], list = POI[kind], tgt = list[Math.random() * list.length | 0];
         b.goal = kind; b.path = route(b, kind, tgt);
       }
@@ -185,7 +196,9 @@ window.LocalServer = function (deliver) {
       if (pl && Math.hypot(pl[0].x - b.x, pl[0].y - b.y) < 160 && r < .7) { const s = pl[1]; s.state = 'dug'; s.regrowAt = Date.now() + cfg.regrowSec * 1000; emit({ t: 'plot', plot: s, by: b.id }); }
     } else if (b.goal === 'pen' && r < .6) { const a = L.animals[Math.random() * 4 | 0]; emit({ t: 'fed', animal: a.id, by: b.id, name: b.name }); }
     else if (b.goal === 'bell' && r < .75) { if (Math.random() < .7) emit({ t: 'bell', by: b.name, id: b.id, halo: true }); else emit({ t: 'bellFart', id: b.id, by: b.name }); }
-    else if (b.goal === 'shout' && r < .85) emit({ t: 'say', id: b.id, text: SHOUTS[Math.random() * SHOUTS.length | 0] });
+    else if (b.goal === 'fish' && r < .8) { const sc = Math.random() < RU.FISH_RULES.scoopRate; emit({ t: 'fish', id: b.id, name: b.name, kind: RU.FISH[Math.random() * 3 | 0].id, scooped: sc, wish: Math.random() < .5 ? WISHES[Math.random() * WISHES.length | 0] : '' }); }
+    else if (b.goal === 'cau') { const st = L.cauSeats.find(s => Math.hypot(s.x - b.x, s.y - b.y) < 30); if (st && !bots.some(o => o !== b && o.pose === 'fish' && o.seat === st.id)) { b.pose = 'fish'; b.seat = st.id; b.wait = 15 + Math.random() * 20; emit({ t: 'pose', id: b.id, pose: 'fish', x: st.x, y: st.y, seat: st.id }); setTimeout(() => { if (b.pose !== 'fish') return; const br = RU.rollBrief(RU.DEFAULT_BRIEFS); if (br && (br.rarity === 'hiem' || br.rarity === 'sieu')) emit({ t: 'feed', msg: `🎣 ${b.name} vừa câu được brief ${RU.RARITY.find(x => x.id === br.rarity).name.toUpperCase()}: “${br.name}”!` }); emit({ t: 'emote', id: b.id, e: 'heart' }); }, 8000 + Math.random() * 6000); } }
+    else if (b.goal === 'samhoi' && r < .5) { const l = samhoiAll(); const it = l[Math.random() * l.length | 0]; if (it) { it.n++; putSh(l); } emit({ t: 'emote', id: b.id, e: 'pray' }); }
     else if (b.goal === 'sweep') { const lf = leaves.filter(x => x.state === 'full').sort((p, q) => Math.hypot(L.leaves[p.id].x - b.x, L.leaves[p.id].y - b.y) - Math.hypot(L.leaves[q.id].x - b.x, L.leaves[q.id].y - b.y))[0]; if (lf && Math.hypot(L.leaves[lf.id].x - b.x, L.leaves[lf.id].y - b.y) < 140) { lf.state = 'swept'; lf.regrowAt = Date.now() + 45000; emit({ t: 'leaf', leaf: lf, by: b.id }); } }
     else if (b.goal === 'eat') emit({ t: 'emote', id: b.id, e: 'heart' });
     else if (r < .4) emit({ t: 'emote', id: b.id, e: ['pray', 'zen', 'wave', 'heart'][Math.random() * 4 | 0] });
@@ -229,17 +242,17 @@ window.LocalServer = function (deliver) {
           if (!acc) return emit({ t: 'authError', msg: 'Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.' });
           profKey = 'pk_demo_profile_' + acc.pid; prof = Object.assign({ phuoc: 20, rau: 0, digDay: '', digsToday: 0, wins: [] }, get(profKey, {}));
           ensureAcc(acc); saveAccount(acc);
-          me = { id: 'me', name: acc.name, color: acc.color, hat: acc.hat, hair: acc.hair, x: L.spawn.x, y: L.spawn.y, dir: 1, lastIncense: 0, lastSay: 0 };
-          emit({ t: 'welcome', you: pub(me), room: { id: 'chua-1', name: 'Chùa 1', num: 1, capacity: 30 }, players: bots.map(pub), plots, incense, altar, templeName: 'Chùa Tổ Nghiệp Designer', shopUrl: 'https://piklab.vn', profile: profile(), pid: 'demo', rooms: rooms(), serverTime: Date.now(), regrowSec: cfg.regrowSec, demo: true, leaves, leafRegrowSec: 45, tug: tugState(), prices, weather: wxOut() });
+          me = { id: 'me', name: acc.name, color: acc.color, hat: acc.hat, hair: acc.hair, outfit: acc.outfit, x: L.spawn.x, y: L.spawn.y, dir: 1, lastIncense: 0, lastSay: 0 };
+          emit({ t: 'welcome', you: pub(me), room: { id: 'chua-1', name: 'Chùa 1', num: 1, capacity: 30 }, players: bots.map(pub), plots, incense, altar, templeName: 'Chùa Tổ Nghiệp Designer', shopUrl: 'https://piklab.vn', profile: profile(), pid: 'demo', rooms: rooms(), serverTime: Date.now(), regrowSec: cfg.regrowSec, demo: true, leaves, leafRegrowSec: 45, tug: tugState(), prices, weather: wxOut(), ver: RU.VERSION, briefs: RU.DEFAULT_BRIEFS });
           fetchWeather();
           setTimeout(() => lightIncense(bots[1], 'ps', 'Khách duyệt bản đầu tiên'), 2500);
           break;
         }
-        case 'move': me.x = m.x; me.y = m.y; if (m.moving && chant) { chant = null; emit({ t: 'pose', id: 'me', pose: '' }); } break;
+        case 'move': me.x = m.x; me.y = m.y; if (m.moving && chant) { chant = null; emit({ t: 'pose', id: 'me', pose: '' }); } if (m.moving && me.seat !== null && me.seat !== undefined) { me.seat = null; me.cast = null; emit({ t: 'pose', id: 'me', pose: '' }); } break;
         case 'emote': emit({ t: 'emote', id: 'me', e: m.e }); break;
         case 'bellStart': {
           const d = dd(), now = Date.now();
-          if (!near(me, L.bell, L.bell.radius + 60)) return;
+          if (!near(me, L.bell, L.bell.radius + 90)) return emit({ t: 'bellWait', msg: 'Lại gần chuông hơn chút nữa rồi thỉnh nhé 🔔' });
           if (d.bell >= BELL_PER_DAY) return emit({ t: 'bellNo', msg: `Hôm nay bạn đã thỉnh đủ ${BELL_PER_DAY} hồi chuông rồi. Mai quay lại nhé 🔔` });
           if (!RU.useStamina(prof, RU.COST.bell, now)) return tired();
           d.bell++; const period = RU.BELL.period(d.bellHits); bellG = { t0: now + RU.BELL.countdown, period };
@@ -253,6 +266,11 @@ window.LocalServer = function (deliver) {
           if (hit) { d.bellHits++; prof.phuoc += prices.bellReward; emit({ t: 'bell', by: me.name, id: 'me', halo: true }); emit({ t: 'bellResult', hit: true, pos, gain: prices.bellReward, profile: profile() }); }
           else { const loss = Math.min(prof.phuoc, prices.bellPenalty); prof.phuoc -= loss; emit({ t: 'bellFart', id: 'me', by: me.name }); emit({ t: 'bellResult', hit: false, pos, loss, profile: profile() }); }
           break;
+        }
+        case 'bellCancel': {
+          const g = bellG; if (!g || Date.now() > g.t0 + 200) return; bellG = null;
+          const d = dd(); d.bell = Math.max(0, d.bell - 1); prof.st = Math.min(RU.STAMINA_MAX, RU.stamina(prof, Date.now()) + RU.COST.bell);
+          emit({ t: 'profile', profile: profile() }); break;
         }
         case 'chantStart': {
           const kind = m.kind === 'beads' ? 'beads' : 'mo', c = L.cushions.find(c => near(me, c, L.cushionRadius + 40)); if (!c) return;
@@ -269,6 +287,71 @@ window.LocalServer = function (deliver) {
           d[ch.kind]++; prof.phuoc += prices.chant; emit({ t: 'emote', id: 'me', e: 'zen' });
           emit({ t: 'profile', profile: profile(), msg: (ch.kind === 'mo' ? 'Tụng xong một thời kinh' : 'Lần trọn một chuỗi tràng hạt') + ` · +${prices.chant} phước 🪷` });
           break;
+        }
+        case 'samhoiList': case 'samhoiPost': case 'samhoiPray': {
+          const l = samhoiAll(), d = dd();
+          if (m.t === 'samhoiPost') {
+            const text = RU.filterText(m.text, RU.DEFAULT_BANNED, RU.SAMHOI.max); if (!text || text.length < 4) return;
+            if ((d.sh || 0) >= RU.SAMHOI.perDay) return emit({ t: 'toast', msg: `Mỗi ngày chỉ ghim được ${RU.SAMHOI.perDay} lời sám hối thôi.` });
+            if (prof.phuoc < prices.samhoi) return emit({ t: 'toast', msg: `Ghim lời sám hối cần ${prices.samhoi} phước.` });
+            prof.phuoc -= prices.samhoi; d.sh = (d.sh || 0) + 1; l.push({ id: 'm' + Date.now(), text, t: Date.now(), n: 0, mine: true, prayed: false }); putSh(l);
+            emit({ t: 'profile', profile: profile(), msg: `Đã ghim lời sám hối · −${prices.samhoi} phước 🙏` });
+            setTimeout(() => { const it = samhoiAll().find(x => x.text === text); if (it) { it.n += 1 + (Math.random() * 3 | 0); const all = samhoiAll(); putSh(all.map(x => x.id === it.id ? it : x)); emit({ t: 'samhoiNew' }); } }, 4000);   // bot đồng cảm
+          }
+          if (m.t === 'samhoiPray') { const it = l.find(x => x.id === m.id); if (!it || it.mine || it.prayed) return; it.prayed = true; it.n++; putSh(l); if ((d.pray || 0) < RU.SAMHOI.prayRewardPerDay) { d.pray = (d.pray || 0) + 1; prof.phuoc += RU.SAMHOI.prayReward; emit({ t: 'profile', profile: profile(), msg: `Đồng cảm 🙏 · +${RU.SAMHOI.prayReward} phước` }); } }
+          const out = samhoiAll().map(x => Object.assign({}, x, { left: Math.max(1, Math.ceil((RU.SAMHOI.ttl - (Date.now() - x.t)) / 3600e3)) }));
+          const mineL = out.filter(x => x.mine);
+          out.sort(m.sort === 'hot' ? (a, b) => b.n - a.n : (a, b) => b.t - a.t);
+          emit({ t: 'samhoi', list: m.sort === 'mine' ? out.filter(x => x.mine) : out, mine: { count: mineL.length, prays: mineL.reduce((a, x) => a + x.n, 0) } });
+          break;
+        }
+        case 'penSubmit': {
+          const d = dd(), cur = prof.penLesson || 0, li = m.lesson | 0; if (li < 0 || li > cur) return;
+          if ((d.pen || 0) >= RU.PEN.perDay) return emit({ t: 'penResult', limit: true, profile: profile() });
+          const score = RU.penScore(li, m.anchors, !!m.closed), pass = score >= RU.PEN.pass; d.pen = (d.pen || 0) + 1;
+          if (pass) { prof.phuoc += prices.penReward; if (li === cur && cur < RU.PEN_LESSONS.length - 1) prof.penLesson = cur + 1; }
+          emit({ t: 'penResult', score, pass, gain: pass ? prices.penReward : 0, lesson: li, profile: profile() });
+          break;
+        }
+        case 'fishBuy': {
+          if (!near(me, { x: L.market.fishSeller.x, y: L.market.fishSeller.y + 70 }, 240)) return emit({ t: 'toast', msg: 'Lại gần thúng cá của Cô Ba để mua nhé 🐟' });
+          const f = RU.FISH.find(x => x.id === m.kind); if (!f) return;
+          const bag = prof.fishBag = prof.fishBag || {};
+          if (Object.values(bag).reduce((a, n) => a + n, 0) >= RU.FISH_RULES.bagMax) return emit({ t: 'toast', msg: `Giỏ đã đủ ${RU.FISH_RULES.bagMax} con rồi, ra bến thả bớt đã nhé.` });
+          if (!RU.useStamina(prof, f.st, Date.now())) return tired();
+          bag[f.id] = (bag[f.id] || 0) + 1;
+          emit({ t: 'profile', profile: profile(), msg: `Cô Ba gói ${f.icon} ${f.name} vào giỏ · −${f.st} sinh lực. Ra mép bến thả để nhận phước nhé!` }); break;
+        }
+        case 'fishRelease': {
+          if (!near(me, L.release, L.release.radius + 80)) return emit({ t: 'toast', msg: 'Ra tận mép bến rồi hãy thả cá nhé 🐟' });
+          const f = RU.FISH.find(x => x.id === m.kind), d = dd(); if (!f) return;
+          if ((d.fish || 0) >= RU.FISH_RULES.perDay) return emit({ t: 'toast', msg: 'Hôm nay bạn đã phóng sinh đủ rồi.' });
+          const bag = prof.fishBag = prof.fishBag || {};
+          if (!(bag[f.id] > 0)) return emit({ t: 'toast', msg: `Giỏ chưa có ${f.name} — mua cá của Cô Ba trước rồi mới thả được nhé 🐟` });
+          bag[f.id]--; d.fish = (d.fish || 0) + 1; prof.phuoc += f.reward;
+          const scooped = Math.random() < RU.FISH_RULES.scoopRate;
+          emit({ t: 'fish', id: 'me', name: me.name, kind: f.id, scooped, wish: String(m.wish || '').slice(0, 70) });
+          emit({ t: 'profile', profile: profile(), msg: `${f.icon} Đã phóng sinh ${f.name} · +${f.reward} phước${scooped ? ' (phước vẫn tính dù cá… quay về thúng Cô Ba 😅)' : ''}` });
+          break;
+        }
+        case 'wash': { if (!near(me, L.well, 160)) return; me.stink = 0; emit({ t: 'stink', id: 'me', ms: 0 }); emit({ t: 'toast', msg: 'Rửa tay xà phòng sạch bong, ruồi bay hết rồi 🧼' }); break; }
+        case 'cauSit': { const st = L.cauSeats[m.seat | 0]; if (!st) return; if (bots.some(o => o.pose === 'fish' && o.seat === st.id)) return emit({ t: 'toast', msg: 'Ghế này có người ngồi rồi 🎣' }); me.seat = st.id; me.x = st.x; me.y = st.y; emit({ t: 'pose', id: 'me', pose: 'fish', seat: st.id }); break; }
+        case 'cauLeave': me.cast = null; me.seat = null; emit({ t: 'pose', id: 'me', pose: '' }); break;
+        case 'cauCast': {
+          if (me.seat === null || me.seat === undefined) return; const d = dd();
+          if ((d.cau || 0) >= RU.CAU.perDay) return emit({ t: 'cauNo', msg: `Hôm nay bạn đã quăng câu ${RU.CAU.perDay} lần rồi.` });
+          if (!RU.useStamina(prof, RU.CAU.cost, Date.now())) return tired();
+          const br = RU.rollBrief(RU.DEFAULT_BRIEFS); d.cau = (d.cau || 0) + 1;
+          const delay = RU.CAU.biteMin + Math.random() * (RU.CAU.biteMax - RU.CAU.biteMin); me.cast = { id: br.id, rarity: br.rarity, biteAt: Date.now() + delay };
+          emit({ t: 'cauBite', delay: Math.round(delay), rarity: br.rarity, profile: profile() }); break;
+        }
+        case 'cauReel': {
+          const c = me.cast; if (!c) return; me.cast = null; const since = Date.now() - c.biteAt, hook = +m.hook;
+          const valid = hook >= 0 && hook <= RU.CAU.hookMs && since >= hook - 250;
+          if (!valid || !m.ok) return emit({ t: 'cauResult', ok: false, profile: profile() });
+          const b = RU.DEFAULT_BRIEFS.find(x => x.id === c.id), R = RU.RARITY.find(x => x.id === c.rarity);
+          prof.briefs = prof.briefs || {}; const first = !prof.briefs[b.id]; prof.briefs[b.id] = (prof.briefs[b.id] || 0) + 1; prof.phuoc += R.reward;
+          emit({ t: 'cauResult', ok: true, brief: b, first, count: prof.briefs[b.id], gain: R.reward, profile: profile() }); break;
         }
         case 'fortuneAccept': {
           const d = dd(), i = (m.no | 0) - 1; if (d.acc || !d.fq.includes(i)) return;
@@ -302,7 +385,8 @@ window.LocalServer = function (deliver) {
             const award = { title: won.title, description: won.description, code: code(won.prefix || 'PIK'), link: 'https://piklab.vn', time: Date.now() };
             prof.wins.push(award);
             emit({ t: 'digResult', ok: true, win: true, award, profile: profile() });
-          } else { prof.rau++; emit({ t: 'digResult', ok: true, win: false, profile: profile() }); }
+          } else if (Math.random() * 100 < RU.POOP.rate) { emit({ t: 'stink', id: 'me', ms: RU.POOP.stinkMs, plot: m.plot | 0 }); me.stink = Date.now() + RU.POOP.stinkMs; emit({ t: 'digResult', ok: true, win: false, poop: true, profile: profile() }); }
+          else { prof.rau++; emit({ t: 'digResult', ok: true, win: false, profile: profile() }); }
           break;
         }
         case 'feed': {
@@ -336,26 +420,25 @@ window.LocalServer = function (deliver) {
           break;
         }
         case 'say': {
-          if (!near(me, M.shout, M.shout.r + 60)) return emit({ t: 'toast', msg: 'Chỉ được khẩu nghiệp trong Bãi Khẩu Nghiệp thôi nhé 🤫' });
           if (Date.now() - me.lastSay < 2500) return emit({ t: 'toast', msg: 'Từ từ thôi, để còn lấy hơi 😮‍💨' });
           const text = RU.filterText(m.text, RU.DEFAULT_BANNED); if (!text) return;
           if (prof.phuoc < prices.shout) return emit({ t: 'toast', msg: 'Hết phước để khẩu nghiệp rồi 😅' });
           if (!RU.useStamina(prof, RU.COST.shout, Date.now())) return tired();
           me.lastSay = Date.now(); prof.phuoc -= prices.shout;
           emit({ t: 'say', id: 'me', text }); emit({ t: 'profile', profile: profile() });
-          setTimeout(() => { const b = bots.find(x => Math.hypot(x.x - M.shout.x, x.y - M.shout.y) < 400); if (b) emit({ t: 'say', id: b.id, text: ['Đồng ý!!!', 'Nói hay lắm!', 'Tui cũng vậy nè 😭', 'Bình tĩnh bạn ơi 🙏'][Math.random() * 4 | 0] }); }, 1500);
+          setTimeout(() => { const b = bots.find(x => Math.hypot(x.x - me.x, x.y - me.y) < 600); if (b) emit({ t: 'say', id: b.id, text: ['Đồng ý!!!', 'Nói hay lắm!', 'Tui cũng vậy nè 😭', 'Bình tĩnh bạn ơi 🙏'][Math.random() * 4 | 0] }); }, 1500);
           break;
         }
         case 'buy': case 'equip': {
-          const list = m.kind === 'hat' ? RU.HATS : m.kind === 'color' ? RU.COLORS : null; if (!list) return;
+          const list = m.kind === 'hat' ? RU.HATS : m.kind === 'color' ? RU.COLORS : m.kind === 'outfit' ? RU.OUTFITS : null; if (!list) return;
           const it = list.find(x => x.id === m.id); if (!it) return;
-          const owned = acc.items[m.kind === 'hat' ? 'hats' : 'colors']; let bought = false;
+          const owned = acc.items[m.kind + 's']; let bought = false;
           if (!owned.includes(it.id)) {
             if (m.t === 'equip') return;
             if (prof.phuoc < it.price) return emit({ t: 'toast', msg: `Cần ${it.price} phước để mua ${it.name}.` });
             prof.phuoc -= it.price; owned.push(it.id); bought = true;
           }
-          if (m.kind === 'hat') acc.hat = it.id; else acc.color = it.id;
+          acc[m.kind] = it.id;
           look(); emit({ t: 'profile', profile: profile(), msg: bought ? `Đã mua ${it.name} · -${it.price} phước ✨` : `Đã thay ${it.name}` });
           break;
         }
