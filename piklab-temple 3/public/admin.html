@@ -63,6 +63,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--gold); }
 .feed li { padding: 8px 0; border-bottom: 1px dashed var(--line); list-style: none; }
 .feed { margin: 0; padding: 0; }
 code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--red); font-weight: 600; }
+.brief-row { display: grid; grid-template-columns: 60px 1.2fr 1.6fr 130px 110px auto; gap: 8px; align-items: center; margin-bottom: 6px; } .brief-row .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; } .brief-row .chk input { width: auto; }
 </style>
 </head>
 <body>
@@ -164,7 +165,18 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
       <h2>Phước &amp; khu chợ</h2>
       <div class="form" id="eForm">
         <label>Phước tặng khi tạo tài khoản <input name="startPhuoc" type="number" min="0"></label>
-        <label>Phước cho mỗi lần gieo quẻ <input name="fortuneCost" type="number" min="0"></label>
+        <label>Phước cho mỗi lần xin quẻ <input name="fortuneCost" type="number" min="0"></label>
+        <label>Số quẻ được xin mỗi ngày (rồi chọn 1 để đón nhận) <input name="fortunePerDay" type="number" min="1" max="20"></label>
+        <label>Lượt thỉnh chuông mỗi ngày <input name="bellPerDay" type="number" min="0"></label>
+        <label>Thỉnh đúng nhịp: + phước <input name="bellReward" type="number" min="0"></label>
+        <label>Lệch nhịp (💨): − phước <input name="bellPenalty" type="number" min="0"></label>
+        <label>Gõ mõ / lần tràng hạt xong: + phước <input name="chantReward" type="number" min="0"></label>
+        <label>Lượt phóng sinh mỗi ngày <input name="fishPerDay" type="number" min="0"></label>
+        <label>Lượt nộp bài Thầy Đồ mỗi ngày <input name="penPerDay" type="number" min="0"></label>
+        <label>Bài Pen Tool đạt: + phước <input name="penReward" type="number" min="0"></label>
+        <label>Ghim lời sám hối: − phước <input name="samhoiPrice" type="number" min="0"></label>
+        <label>% đào phải cức (khi không trúng voucher) <input name="poopRate" type="number" min="0" max="100"></label>
+        <label>Lượt quăng câu brief mỗi ngày <input name="cauPerDay" type="number" min="0"></label>
         <label>Phước cho mỗi câu khẩu nghiệp <input name="shoutCost" type="number" min="0"></label>
         <label>Phước nhận được khi quét 1 ụ lá đa <input name="sweepReward" type="number" min="0"></label>
         <label>Lá đa rụng lại sau (giây) <input name="leafRegrowSec" type="number" min="5"></label>
@@ -172,6 +184,20 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
           <textarea name="fortunes" style="min-height:220px;font-family:inherit;font-size:13.5px"></textarea></label>
         <label class="full">Từ cấm ở Bãi Khẩu Nghiệp — tự che thành *** (mỗi dòng hoặc cách nhau dấu phẩy)
           <textarea name="bannedWords" style="min-height:70px"></textarea></label>
+      </div>
+      <h2>Brief ở Bãi Câu <span class="muted" style="font-size:13px;font-weight:500">(tỉ lệ theo độ hiếm: Phổ thông 60% · Trung bình 28% · Hiếm 10% · Cực hiếm 2%)</span></h2>
+      <p class="muted">Thêm brief mới để người chơi có thứ mới mà sưu tầm. Bỏ tick “Đang thả” để tạm rút brief khỏi hồ (người đã câu được vẫn giữ trong sổ). Nhớ bấm “Lưu cài đặt”.</p>
+      <div id="briefRows"></div>
+      <button class="btn gray sm" id="addBrief">+ Thêm brief</button>
+      <h2>Bảng sám hối <span class="muted" style="font-size:13px;font-weight:500">(người chơi thấy ẩn danh · tự gỡ sau 48 giờ)</span></h2>
+      <div id="shList" class="muted">Đang tải…</div>
+      <h2>Thời tiết trong chùa</h2>
+      <p class="muted">Tự động: lấy dự báo thật (Open-Meteo, miễn phí) mỗi 15 phút cho thành phố đã chọn → mưa, giông, sương mù, tuyết… hiện trong game. Hoặc chọn tay một kiểu thời tiết cố định.</p>
+      <div class="form" id="wForm">
+        <label>Chế độ <select name="weatherMode"><option value="auto">Theo dự báo thật</option><option value="manual">Chọn tay</option></select></label>
+        <label>Thành phố <select name="weatherCity"></select></label>
+        <label>Thời tiết khi chọn tay <select name="weatherManual"></select></label>
+        <label>Hiện tại trong game <input id="wxNow" disabled></label>
       </div>
       <h2>Bài vị trên ban thờ</h2>
       <p class="muted">Bấm “⬆ Tải icon” để đặt ảnh icon của từng ứng dụng lên bài vị (PNG/SVG/JPG, tự thu nhỏ còn 192px). Chưa có icon thì bài vị hiện tên viết tắt.</p>
@@ -185,7 +211,7 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
 
 <script>
 const $ = s => document.querySelector(s);
-let token = sessionStorage.getItem('pk_admin') || '';
+let token = localStorage.getItem('pk_admin') || '';
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = n => Number(n || 0).toLocaleString('vi-VN');
 const PALETTE = ['#8c2b1e', '#c8902e', '#2f855a', '#2b6cb0', '#8e44ad', '#d35400', '#2c7a7b', '#b7791f'];
@@ -195,13 +221,13 @@ async function api(path, opt = {}) {
   if (r.status === 401) { logout(); throw new Error('401'); }
   return r.json();
 }
-function logout() { if (token) fetch('/api/admin/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(() => {}); token = ''; sessionStorage.removeItem('pk_admin'); $('#app').classList.add('hidden'); $('#loginView').classList.remove('hidden'); }
+function logout() { if (token) fetch('/api/admin/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + token } }).catch(() => {}); token = ''; localStorage.removeItem('pk_admin'); $('#app').classList.add('hidden'); $('#loginView').classList.remove('hidden'); }
 $('#logout').onclick = e => { e.preventDefault(); logout(); };
 async function login() {
   const r = await fetch('/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: $('#pw').value }) });
   const j = await r.json();
   if (!j.token) return $('#loginErr').textContent = j.error || 'Lỗi';
-  token = j.token; sessionStorage.setItem('pk_admin', token); start();
+  token = j.token; localStorage.setItem('pk_admin', token); start();
 }
 $('#loginBtn').onclick = login; $('#pw').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
 
@@ -252,11 +278,16 @@ async function loadStats() {
     ['🪔 Nén hương hôm nay', d.incense, `Tổng: ${fmt(s.totals.incense)}`],
     ['⛏️ Lượt đào hôm nay', d.digs, `Tổng: ${fmt(s.totals.digs)}`],
     ['🎟️ Voucher đã phát hôm nay', d.wins, `Tổng: ${fmt(s.totals.wins)}`],
-    ['🥬 Lượt cho thú ăn', d.feeds, `🔔 Thỉnh chuông: ${d.bells}`],
-    ['🎋 Gieo quẻ hôm nay', d.fortunes, `📢 Khẩu nghiệp: ${d.shouts} câu`],
+    ['🥬 Lượt cho thú ăn', d.feeds, `🔔 Thỉnh chuông: ${d.bells} (${d.bellHits} đúng nhịp) · 🪷 Tụng/niệm: ${d.chants}`],
+    ['🌦️ Thời tiết trong game', (s.weatherKinds[s.weather.kind] || ['?'])[0] + ' ' + (s.weatherKinds[s.weather.kind] || ['', '?'])[1], `${esc(s.weather.city)}${s.weather.temp != null ? ' · ' + s.weather.temp + '°C' : ''} · ${esc(s.weather.source)}`],
+    ['🪔 Hương theo bài vị hôm nay', Object.values(d.apps || {}).reduce((a, b) => a + b, 0), Object.entries(d.apps || {}).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${esc(s.altarNames[k] || k)}: ${v}`).join(' · ') || 'Chưa có'],
+    ['🎋 Xin quẻ hôm nay', d.fortunes, `📢 Khẩu nghiệp: ${d.shouts} câu`],
+    ['🐟 Phóng sinh hôm nay', d.fishes, `Cô Ba vớt lại: ${d.scoops} con · 📜 Sám hối: ${d.samhois} lời, ${d.prays} 🙏`],
+    ['✒️ Bài Pen Tool hôm nay', d.pens, `Đạt: ${d.penPass} bài`],
+    ['🎣 Quăng câu brief hôm nay', d.casts, `Câu được: ${d.catches} brief · 💩 Đào phải cức: ${d.poops}`],
     ['🪢 Trận kéo co hôm nay', d.tugs, `🧹 Quét lá: ${d.sweeps} ụ`],
     ['🍜 Món ăn đã bán hôm nay', d.meals, `👒 Mua đồ / cắt tóc: ${d.purchases}`]
-  ].map(([l, v, sub, cls]) => `<div class="kpi ${cls || ''}"><div class="l">${l}</div><div class="v">${fmt(v)}</div><div class="s">${sub}</div></div>`).join('');
+  ].map(([l, v, sub, cls]) => `<div class="kpi ${cls || ''}"><div class="l">${l}</div><div class="v">${typeof v === 'string' ? v : fmt(v)}</div><div class="s">${sub}</div></div>`).join('');
   $('#roomsTbl').innerHTML = '<tr><th>Khuôn viên</th><th class="num">Đang online</th><th style="width:45%">Mức lấp đầy</th><th>Trạng thái</th></tr>' + s.rooms.map(r => {
     const pct = Math.min(100, r.online / r.capacity * 100);
     return `<tr><td>🛕 <b>${esc(r.name)}</b></td><td class="num">${r.online}/${r.capacity}</td><td><div class="bar"><i class="${pct >= 100 ? 'full' : ''}" style="width:${pct}%"></i></div></td><td>${pct >= 100 ? '<span class="pill off">Đã đủ người</span>' : '<span class="pill on">Còn chỗ</span>'}</td></tr>`;
@@ -366,7 +397,17 @@ async function loadCfg() {
   cfg = await api('/api/admin/config');
   const f = $('#cForm'); ['templeName', 'roomCapacity', 'digsPerDay', 'maxAccountsPerIpPerDay', 'plotRegrowSec', 'incenseCooldownSec', 'shopUrl'].forEach(k => f.querySelector(`[name=${k}]`).value = cfg[k]);
   $('#altarRows').innerHTML = cfg.altar.map(altarRow).join('');
-  const e = $('#eForm'); ['startPhuoc', 'fortuneCost', 'shoutCost', 'sweepReward', 'leafRegrowSec'].forEach(k => e.querySelector(`[name=${k}]`).value = cfg[k] ?? '');
+  const e = $('#eForm'); ['startPhuoc', 'fortuneCost', 'shoutCost', 'sweepReward', 'leafRegrowSec', 'fortunePerDay', 'bellPerDay', 'bellReward', 'bellPenalty', 'chantReward', 'fishPerDay', 'penPerDay', 'penReward', 'samhoiPrice', 'poopRate', 'cauPerDay'].forEach(k => e.querySelector(`[name=${k}]`).value = cfg[k] ?? '');
+  $('#briefRows').innerHTML = (cfg.briefs || []).map(briefRow).join('');
+  loadSamhoi();
+  try {
+    const st = await api('/api/admin/stats'), w = $('#wForm');
+    w.querySelector('[name=weatherCity]').innerHTML = st.cities.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+    w.querySelector('[name=weatherManual]').innerHTML = Object.entries(st.weatherKinds).map(([k, v]) => `<option value="${k}">${v[0]} ${esc(v[1])}</option>`).join('');
+    ['weatherMode', 'weatherCity', 'weatherManual'].forEach(k => w.querySelector(`[name=${k}]`).value = cfg[k] || '');
+    const wk = st.weatherKinds[st.weather.kind] || ['', ''];
+    $('#wxNow').value = `${wk[0]} ${wk[1]}${st.weather.temp != null ? ' · ' + st.weather.temp + '°C' : ''} · ${st.weather.city} (${st.weather.source})`;
+  } catch (err) {}
   e.querySelector('[name=fortunes]').value = (cfg.fortunes || []).join('\n'); e.querySelector('[name=bannedWords]').value = (cfg.bannedWords || []).join(', ');
   $('#fCount').textContent = (cfg.fortunes || []).length;
 }
@@ -383,12 +424,25 @@ $('#altarRows').addEventListener('change', e => {
   fr.readAsDataURL(e.target.files[0]);
 });
 $('#addAltar').onclick = () => $('#altarRows').insertAdjacentHTML('beforeend', altarRow({ id: 'app' + Date.now() % 1000, name: 'Ứng dụng mới', short: 'Ap', color: '#cccccc', image: '' }));
+const RARS = [['thuong', 'Phổ thông'], ['kha', 'Trung bình'], ['hiem', 'Hiếm'], ['sieu', 'Cực hiếm']];
+function briefRow(b) {
+  return `<div class="brief-row" data-id="${esc(b.id || '')}"><input data-b="icon" value="${esc(b.icon || '📄')}" style="width:52px;text-align:center"><input data-b="name" value="${esc(b.name || '')}" placeholder="Tên brief (vd: Logo to hơn nữa em)"><input data-b="desc" value="${esc(b.desc || '')}" placeholder="Mô tả vui"><select data-b="rarity">${RARS.map(([v, n]) => `<option value="${v}" ${b.rarity === v ? 'selected' : ''}>${n}</option>`).join('')}</select><label class="chk"><input type="checkbox" data-b="active" ${b.active !== false ? 'checked' : ''}> Đang thả</label><button class="btn gray sm" data-delbrief>Xoá</button></div>`;
+}
+$('#addBrief').onclick = () => $('#briefRows').insertAdjacentHTML('beforeend', briefRow({ id: 'b' + Date.now().toString(36), icon: '📄', name: '', desc: '', rarity: 'thuong', active: true }));
+document.addEventListener('click', e => { const b = e.target.closest('[data-delbrief]'); if (b) b.closest('.brief-row').remove(); });
+async function loadSamhoi() {
+  const l = await api('/api/admin/samhoi');
+  $('#shList').innerHTML = l.length ? '<table class="tbl"><tr><th>Lời sám hối</th><th>Người viết</th><th class="num">🙏</th><th>Lúc</th><th></th></tr>' + l.slice(0, 100).map(x => `<tr><td>${esc(x.text)}</td><td>${esc(x.by)}</td><td class="num">${x.n}</td><td>${new Date(x.t).toLocaleString('vi-VN')}</td><td><button class="btn gray sm" data-delsh="${esc(x.id)}">Gỡ</button></td></tr>`).join('') + '</table>' : '<p class="muted">Chưa có lời sám hối nào.</p>';
+}
+document.addEventListener('click', async e => { const b = e.target.closest('[data-delsh]'); if (!b) return; if (!confirm('Gỡ lời sám hối này khỏi bảng?')) return; await api('/api/admin/samhoi?id=' + encodeURIComponent(b.dataset.delsh), { method: 'DELETE' }); loadSamhoi(); });
 $('#saveCfg').onclick = async () => {
   const f = $('#cForm'), body = {};
   ['templeName', 'shopUrl'].forEach(k => body[k] = f.querySelector(`[name=${k}]`).value);
   ['roomCapacity', 'digsPerDay', 'maxAccountsPerIpPerDay', 'plotRegrowSec', 'incenseCooldownSec'].forEach(k => body[k] = +f.querySelector(`[name=${k}]`).value);
-  const ef = $('#eForm'); ['startPhuoc', 'fortuneCost', 'shoutCost', 'sweepReward', 'leafRegrowSec'].forEach(k => body[k] = ef.querySelector(`[name=${k}]`).value === '' ? '' : +ef.querySelector(`[name=${k}]`).value);
+  const wf = $('#wForm'); ['weatherMode', 'weatherCity', 'weatherManual'].forEach(k => body[k] = wf.querySelector(`[name=${k}]`).value);
+  const ef = $('#eForm'); ['startPhuoc', 'fortuneCost', 'shoutCost', 'sweepReward', 'leafRegrowSec', 'fortunePerDay', 'bellPerDay', 'bellReward', 'bellPenalty', 'chantReward', 'fishPerDay', 'penPerDay', 'penReward', 'samhoiPrice', 'poopRate', 'cauPerDay'].forEach(k => body[k] = ef.querySelector(`[name=${k}]`).value === '' ? '' : +ef.querySelector(`[name=${k}]`).value);
   body.fortunes = ef.querySelector('[name=fortunes]').value; body.bannedWords = ef.querySelector('[name=bannedWords]').value;
+  body.briefs = [...document.querySelectorAll('#briefRows .brief-row')].map(r => ({ id: r.dataset.id, icon: r.querySelector('[data-b=icon]').value, name: r.querySelector('[data-b=name]').value.trim(), desc: r.querySelector('[data-b=desc]').value.trim(), rarity: r.querySelector('[data-b=rarity]').value, active: r.querySelector('[data-b=active]').checked })).filter(b => b.name);
   body.altar = [...document.querySelectorAll('#altarRows .altar-row')].map(r => { const o = {}; r.querySelectorAll('[data-k]').forEach(i => o[i.dataset.k] = i.value); return o; });
   await api('/api/admin/config', { method: 'POST', body });
   $('#cfgMsg').textContent = '✓ Đã lưu. Người chơi vào chùa sau sẽ thấy thay đổi.'; setTimeout(() => $('#cfgMsg').textContent = '', 4000);
