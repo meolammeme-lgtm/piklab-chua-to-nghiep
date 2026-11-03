@@ -259,7 +259,7 @@ function onMsg(m) {
     case 'bellNo': S.busy = false; clearTimeout(S.bellWaitT); mgClose(); toast(m.msg); break;
     case 'bellWait': S.busy = false; clearTimeout(S.bellWaitT); bellReady(m.msg); break;
     case 'bellResult': setProfile(m.profile); bellResult(m); break;
-    case 'pose': { const p = S.me && m.id === S.me.id ? S.me : S.players.get(m.id); if (p) { p.pose = m.pose; p.seat = m.seat; if (m.x !== undefined && (p !== S.me || m.yaw !== undefined)) { p.x = p.tx = m.x; p.y = p.ty = m.y; } if (m.pose === 'sit') p.yaw = m.yaw !== undefined ? m.yaw : Math.PI; if (m.pose === 'fish') p.yaw = 0; } break; }
+    case 'pose': { const p = S.me && m.id === S.me.id ? S.me : S.players.get(m.id); if (p === S.me) setTimeout(updPoseBtns); if (p) { p.pose = m.pose; p.seat = m.seat; if (m.x !== undefined && (p !== S.me || m.yaw !== undefined)) { p.x = p.tx = m.x; p.y = p.ty = m.y; } if (m.pose === 'sit') p.yaw = m.yaw !== undefined ? m.yaw : Math.PI; if (RU.POSES[m.pose] && m.yaw !== undefined && p !== S.me) p.yaw = m.yaw; if (m.pose === 'fish') p.yaw = 0; } break; }
     case 'stink': { if (m.ms) S.stink.set(m.id, performance.now() + m.ms); else S.stink.delete(m.id); if (m.plot !== undefined) S.poopFx.push({ plot: m.plot, t: performance.now() }); break; }
     case 'briefs': S.briefs = m.briefs || []; break;
     case 'cauBite': setProfile(m.profile); cauBite(m); break;
@@ -378,6 +378,7 @@ function moveMe(dt) {
   else if (S.target) { const ex = S.target.x - me.x, ey = S.target.y - me.y, d = Math.hypot(ex, ey); if (d < 6) S.target = null; else { dx = ex / d; dy = ey / d; } }
   const len = Math.hypot(dx, dy);
   me.moving = len > 0 && !S.busy;
+  if (me.moving && RU.POSES[me.pose]) { me.pose = ''; updPoseBtns(); }          // đang ngồi / ngủ gật: bước đi là đứng dậy
   if (me.moving) {
     const sp = 200 * dt; dx = dx / len * sp; dy = dy / len * sp;
     const ox = me.x, oy = me.y;
@@ -1064,15 +1065,17 @@ $('#sayInput').addEventListener('keydown', e => { if (e.key === 'Escape') { e.ta
 function avatarItems(items, p, t, isMe) {
   const am = W3.avatarMeshes(R, p.color, p.hat, p.hair, p.outfit), x = p.x * K, z = p.y * K, h = groundH(p.x, p.y);
   const em = S.emotes.get(p.id), age = em ? (t - em.t) / 1000 : 9;
-  const bow = em && em.e === 'bow' && age < 1.6 ? Math.sin(Math.min(1, age / 1.6) * Math.PI) * .55 : 0;
+  const bow = (em && em.e === 'bow' && age < 1.6 ? Math.sin(Math.min(1, age / 1.6) * Math.PI) * .55 : 0) + (em && em.e === 'kowtow' && age < 3 ? Math.abs(Math.sin(age * Math.PI)) * .85 : 0);
+  const act = em && age < 3 ? em.e : '', hop = act === 'jump' && age < 1.5 ? Math.abs(Math.sin(age * Math.PI * 2)) * .35 : act === 'cheer' && age < 2 ? Math.abs(Math.sin(age * Math.PI * 2)) * .25 : act === 'dance' ? Math.abs(Math.sin(age * 10)) * .1 : 0;
+  const spin = act === 'dance' ? age * 6 : act === 'cheer' && age < 2 ? Math.sin(age * Math.PI) * .6 : 0, shake = act === 'laugh' && age < 2 ? Math.sin(age * 30) * .12 : act === 'cry' && age < 2.5 ? .28 : 0;
   const zen = em && em.e === 'zen' && age < 3.2, wave = em && em.e === 'wave' && age < 1.5;
   const digging = isMe && S.digAnim && t - S.digAnim < 900;
   const bob = p.moving ? Math.abs(Math.sin(p.walk * 11)) * .06 : Math.sin(t / 500 + p.x) * .008;
   const sweeping = isMe && S.sweepAnim && t - S.sweepAnim < 900;
-  const tilt = bow + (digging ? Math.abs(Math.sin((t - S.digAnim) / 900 * Math.PI * 3)) * .35 : 0) + (p.moving ? .06 : 0) + (sweeping ? .25 : 0) - (S.tug && S.tug.match && (S.tug.match.a === p.id || S.tug.match.b === p.id) ? .32 + Math.sin(t / 60) * .04 : 0);
+  const tilt = bow + shake + (digging ? Math.abs(Math.sin((t - S.digAnim) / 900 * Math.PI * 3)) * .35 : 0) + (p.moving ? .06 : 0) + (sweeping ? .25 : 0) - (S.tug && S.tug.match && (S.tug.match.a === p.id || S.tug.match.b === p.id) ? .32 + Math.sin(t / 60) * .04 : 0);
   const mt = S.tug && S.tug.match, tugging = mt && (mt.a === p.id || mt.b === p.id);
   if (tugging) { p.yaw = mt.a === p.id ? Math.PI / 2 : -Math.PI / 2; }
-  const yaw = p.yaw, sy = Math.sin(yaw), cyw = Math.cos(yaw), y0 = h + bob;
+  const yaw = p.yaw + spin, sy = Math.sin(yaw), cyw = Math.cos(yaw), y0 = h + bob + hop;
   if (p.pose === 'fish') {   // ngồi ghế câu, cầm cần chĩa ra hồ
     const sy0 = h + .22; items.push({ mesh: am.sitBody, m: T(x, sy0, z, 0) }); items.push({ mesh: am.head, m: T(x, sy0 + .78, z, 0) });
     const mine = isMe && S.cauState, dip = mine === 'bite' ? .08 + Math.sin(t / 60) * .05 : mine === 'reel' ? .05 + Math.sin(t / 45) * .06 : 0;
@@ -1080,17 +1083,18 @@ function avatarItems(items, p, t, isMe) {
     items.push({ mesh: dyn.rod, m: T(x + .15, sy0 + .35, z + .1), noShadow: true });
     items.push({ mesh: dyn.line, m: T(bx, by, bz, 0, 1, sy0 + .35 + .92 - by, 1), noShadow: true });
     if (!isMe || mine) items.push({ mesh: dyn.bobber, m: T(bx, by, bz), noShadow: true });
-  } else if (zen || p.pose === 'sit') {
+  } else if (zen || p.pose === 'sit' || RU.POSES[p.pose]) {
+    const nod = p.pose === 'nap' ? .32 + Math.sin(t / 700) * .12 : 0;      // ngủ gật: đầu gục gặc
     items.push({ mesh: am.sitBody, m: T(x, h, z, yaw) });
-    items.push({ mesh: am.head, m: T(x, h + .78, z, yaw) });
+    items.push({ mesh: am.head, m: T(x + sy * nod * .12, h + .78 - nod * .05, z + cyw * nod * .12, yaw, 1, 1, 1, nod) });
   } else {
-    const pray = em && (em.e === 'pray' || em.e === 'bow') && age < 2.6;
-    const joined = pray || (isMe && S.busy && !digging);
+    const pray = em && (em.e === 'pray' || em.e === 'bow' || em.e === 'kowtow') && age < 2.6;
+    const joined = pray || (act === 'clap' && age < 2 && Math.floor(age * 8) % 2 === 0) || (isMe && S.busy && !digging);
     items.push({ mesh: am.body, m: T(x, y0, z, yaw, 1, 1, 1, tilt) });
     // chỉ vẽ MỘT đôi tay: buông hai bên hoặc chắp trước ngực
     items.push({ mesh: joined ? am.armsPray : am.armsSide, m: T(x, y0, z, yaw, 1, 1, 1, tilt) });
     const hx = x + sy * Math.sin(tilt) * .86, hy = y0 + Math.cos(tilt) * .86, hz = z + cyw * Math.sin(tilt) * .86;
-    items.push({ mesh: am.head, m: T(hx, hy, hz, yaw + (wave ? Math.sin(t / 90) * .25 : 0), 1, 1, 1, tilt * 1.1) });
+    items.push({ mesh: am.head, m: T(hx, hy, hz, yaw + (wave ? Math.sin(t / 90) * .25 : 0), 1, 1, 1, tilt * 1.1, act === 'think' && age < 2.5 ? .28 : 0) });
     const sw = p.moving ? Math.sin(p.walk * 11) * .12 : 0;
     for (const s of [-1, 1]) { const lx = s * .11, lz = sw * s; items.push({ mesh: dyn.feet, m: T(x + cyw * lx + sy * lz, h, z - sy * lx + cyw * lz, yaw) }); }
     if (sweeping) { const a = Math.sin((t - S.sweepAnim) / 900 * Math.PI * 4); items.push({ mesh: dyn.broom, m: T(x + sy * .45 + cyw * a * .2, h, z + cyw * .45 - sy * a * .2, yaw, 1, 1, 1, .5, a * .5) }); }
@@ -1247,8 +1251,9 @@ function drawOverlay(t) {
     const isMe = p === S.me, h = groundH(p.x, p.y);
     const s = label(p.name, p.x * K, h + 1.48 + (p.hat === 'non' ? .12 : 0), p.y * K, { bg: isMe ? 'rgba(232,170,60,.92)' : undefined, fg: isMe ? '#3a1d08' : undefined, w: isMe ? 700 : 600, size: 11.5 });
     const em = S.emotes.get(p.id), age = em ? (t - em.t) / 1000 : 9;
+    if (p.pose === 'nap' && s && !(em && age < 2.6)) { const k = (t / 1600) % 1, y = s[1] - 26 - k * 22; octx.globalAlpha = 1 - k; octx.font = `${14 + k * 8}px serif`; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText('💤', s[0] + 10 + k * 10, y); octx.globalAlpha = 1; }
     if (em && age < 2.6 && s) {
-      const icon = { pray: '🙏', bow: '🙇', heart: '💛', wave: '👋', zen: '🧘' }[em.e], y = s[1] - 30 - age * 8;
+      const icon = (RU.EMOTES[em.e] || RU.EMOTES.pray)[0], y = s[1] - 30 - age * 8;
       octx.globalAlpha = Math.min(1, (2.6 - age) * 2); octx.fillStyle = '#fffaf0'; octx.beginPath(); octx.arc(s[0], y, 16, 0, 7); octx.fill();
       octx.font = '18px serif'; octx.textAlign = 'center'; octx.textBaseline = 'middle'; octx.fillText(icon, s[0], y + 1); octx.globalAlpha = 1;
     }
@@ -1443,7 +1448,20 @@ $('#roomBtn').onclick = () => $('#roomList').classList.toggle('hidden');
 $('#actionBtn').onclick = doInteract;
 const updSound = () => { $('#soundBtn').textContent = S.sound ? '🔔' : '🔕'; };
 $('#soundBtn').onclick = () => { S.sound = !S.sound; sset('pk_sound', S.sound ? '1' : '0'); updSound(); if (S.sound) sfx.soft(); }; updSound();
-document.querySelectorAll('.emote').forEach(b => b.onclick = () => send({ t: 'emote', e: b.dataset.e }));
+function setPose(pose) {                                // ngồi / ngủ gật tại chỗ; bấm lại thì đứng dậy
+  const me = S.me; if (!me || S.mg || S.inMatch || me.pose === 'sit' || me.pose === 'fish') return;
+  pose = me.pose === pose ? '' : pose; me.pose = pose; S.target = null; send({ t: 'rest', pose, yaw: me.yaw }); updPoseBtns();
+}
+function updPoseBtns() { document.querySelectorAll('[data-pose]').forEach(b => b.classList.toggle('on', !!S.me && S.me.pose === b.dataset.pose)); }
+$('#emoteMore .em-grid').innerHTML = ['dance', 'jump', 'clap', 'laugh', 'cry', 'think', 'cheer', 'kowtow'].map(e => `<button data-e="${e}"><span>${RU.EMOTES[e][0]}</span>${RU.EMOTES[e][1]}</button>`).join('') + `<button data-pose="nap"><span>${RU.POSES.nap[0]}</span>${RU.POSES.nap[1]}</button>`;
+const emoteMore = open => { $('#emoteMore').classList.toggle('hidden', !open); $('#emoteMoreBtn').setAttribute('aria-expanded', open); $('#emoteMoreBtn').classList.toggle('on', open); $('.hud-bl').classList.toggle('open', open); };
+$('.hud-bl').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'emoteMoreBtn') return emoteMore($('#emoteMore').classList.contains('hidden'));
+  if (b.dataset.pose) setPose(b.dataset.pose); else if (b.dataset.e) { if (RU.POSES[S.me && S.me.pose]) { S.me.pose = ''; send({ t: 'rest', pose: '' }); updPoseBtns(); } send({ t: 'emote', e: b.dataset.e }); }
+  if (b.closest('#emoteMore')) emoteMore(false);
+});
+addEventListener('pointerdown', e => { if (!e.target.closest('.hud-bl')) emoteMore(false); });
 
 /* ---------------- Đình Cờ: cờ vua / cờ caro cược phước ---------------- */
 const CO_REASON = { mate: 'Chiếu hết!', stalemate: 'Hết nước đi — hoà', material: 'Không đủ quân chiếu hết — hoà', fifty: 'Luật 50 nước — hoà', agree: 'Hai bên đồng ý hoà', five: 'Đủ 5 quân liền!', full: 'Kín bàn — hoà', time: 'Hết giờ', resign: 'Đầu hàng', leave: 'Rời ván giữa chừng' };
