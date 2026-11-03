@@ -284,6 +284,7 @@ function onMsg(m) {
     case 'digResult': S.busy = false; setProfile(m.profile); showDigResult(m); break;
     case 'look': { const p = S.me && m.id === S.me.id ? S.me : S.players.get(m.id); if (p) { p.color = m.color; p.hat = m.hat; p.hair = m.hair; p.outfit = m.outfit; } break; }
     case 'say': S.says.set(m.id, { text: m.text, t: performance.now() }); sfx.shout(); break;
+    case 'npcSay': S.says.set(m.id, { text: m.text, t: performance.now() }); break;            // NPC nói: chỉ hiện bong bóng, không phát tiếng
     case 'leaf': S.leaves[m.leaf.id] = m.leaf; if (m.leaf.state === 'swept') { const d = L.leaves[m.leaf.id]; for (let i = 0; i < 14; i++) S.particles.push({ x: d.x * K + (Math.random() - .5) * .4, y: .1, z: d.y * K + (Math.random() - .5) * .3, vx: (Math.random() - .5) * 2, vy: 1 + Math.random() * 1.5, vz: (Math.random() - .5) * 1.5, life: 1.2, age: 0, kind: 'spark', c: ['#c9a43a', '#b5832e', '#8fa64a'][i % 3], r: 3 }); if (m.by !== S.me.id) sfx.sweep(); } break;
     case 'fortune': S.busy = false; setProfile(m.profile); openFortuneBoard(m.no); break;
     case 'tired': S.busy = false; clearTimeout(S.bellWaitT); if (S.mg === 'bell') mgClose(); setProfile(m.profile); showTired(); break;
@@ -427,6 +428,8 @@ function findInteract(t) {
   if (d({ x: MK.food.x, y: MK.food.y + 40 }) < 250) return { kind: 'shop', shop: 'food', icon: '🍜', text: 'Gọi món hồi sinh lực', x: MK.food.x - 10, y: MK.food.y - 95, h: 1.7 };
   if (d({ x: MK.barber.x, y: MK.barber.y + 50 }) < 160) return { kind: 'shop', shop: 'hair', icon: '✂️', text: 'Cắt tóc / cạo trọc', x: MK.barber.x - 60, y: MK.barber.y - 20, h: 1.6 };
   if (d({ x: MK.fortune.x, y: MK.fortune.y + 120 }) < 180) return { kind: 'fortune', icon: '🎋', text: td.accepted ? `Xem quẻ hôm nay (số ${td.accepted.no})` : td.fortuneLeft === 0 ? 'Chọn quẻ để đón nhận' : `Xin quẻ (${S.prices.fortune} phước · còn ${td.fortuneLeft !== undefined ? td.fortuneLeft : 3} lượt)`, x: MK.fortune.x, y: MK.fortune.y, h: 3.1 };
+  const tang = S.players.get(RU.TANG.id);
+  if (tang && tang.pose !== 'sit' && d(tang) < 110) return { kind: 'tang', icon: '🧘', text: 'Hỏi chuyện Đường Tăng', x: tang.x, y: tang.y, h: 2.2 };
   if (coInZone()) return { kind: 'co', icon: '♟️', text: S.coG && !S.coG.end ? 'Mở bàn cờ đang đánh' : 'Đình Cờ: thách đấu', x: L.market.co.x, y: L.market.co.y - 40, h: 2.4 };
   if (inTugZone()) return { kind: 'tug', icon: '🪢', text: S.inMatch ? 'Đang kéo co!' : 'Sân kéo co: thách đấu / nhận kèo', x: MK.tug.x, y: MK.tug.y - 60, h: 1.4 };
   let lb = null, ld = 1e9;
@@ -458,6 +461,7 @@ function doInteract() {
   else if (it.kind === 'shop') openShop(it.shop);
   else if (it.kind === 'tug') { if (!S.inMatch) openTug(); }
   else if (it.kind === 'co') openCo();
+  else if (it.kind === 'tang') { const L2 = RU.TANG_TALK; S.says.set(RU.TANG.id, { text: L2[Math.random() * L2.length | 0], t: performance.now() }); sfx.pop(); }
   else if (it.kind === 'samhoi') openSamhoi();
   else if (it.kind === 'pen') openPen();
   else if (it.kind === 'fish') openFish();
@@ -997,7 +1001,7 @@ function renderTug() {
   if (tg.match) h += `<p class="muted">Đang có trận: <b>${esc(tg.match.aName)}</b> ⚔️ <b>${esc(tg.match.bName)}</b> · cược ${tg.match.bet} phước</p>`;
   const others = (tg.offers || []).filter(o => o.id !== S.me.id);
   h += '<label>Kèo đang chờ</label>' + (others.length ? others.map(o => `<div class="tug-offer"><span>🪢 <b>${esc(o.name)}</b> cược <b>${o.bet}</b> phước</span><button class="mini-btn" data-accept="${o.id}" ${p.phuoc < o.bet ? 'disabled title="Không đủ phước"' : ''}>Nhận kèo</button></div>`).join('') : '<p class="muted">Chưa ai thách đấu. Ra kèo trước đi!</p>');
-  h += mine ? `<label>Kèo của bạn</label><div class="tug-offer"><span>Đang chờ người nhận kèo <b>${mine.bet}</b> phước…</span><button class="mini-btn" data-cancel="1">Huỷ</button></div>`
+  h += mine ? `<label>Kèo của bạn</label><div class="tug-offer"><span>Đang chờ người nhận kèo <b>${mine.bet}</b> phước…<small class="offer-exp" data-exp="${mine.exp || ''}"></small></span><button class="mini-btn" data-cancel="1">Huỷ</button></div>`
     : `<label>Ra kèo thách đấu · bạn có ${p.phuoc} phước</label><div class="bets">${RU.TUG_BETS.map(b => `<button data-bet="${b}" ${p.phuoc < b ? 'disabled' : ''}>${b} 🍀</button>`).join('')}</div>`;
   h += `<p class="muted small" style="text-align:left">Mỗi trận tốn ${RU.COST.tug} sinh lực. Thắng nhận cả phần cược của đối thủ, hoà thì hoàn lại.${S.demo ? ' Bản demo: một bạn đồng tu (bot) sẽ nhận kèo sau vài giây.' : ''}</p>`;
   $('#tugBody').innerHTML = h;
@@ -1454,11 +1458,11 @@ function coRenderLobby() {
     <div class="co-lobby"><div>
       <label>Chọn môn cờ</label>
       <div class="co-picks">${card('chess', '♞', 'Cờ vua', `${RU.CO.clock.chess / 60e3} phút mỗi bên`, 'Đủ luật: nhập thành, bắt tốt qua đường, phong cấp')}${card('caro', '<i class="cx">✕</i><i class="co">◯</i>', 'Cờ caro 20×20', `${RU.CO.clock.caro / 60e3} phút mỗi bên`, '5 quân liền là thắng · bị chặn 2 đầu không tính')}</div>
-      ${mine ? `<label>Kèo của bạn</label><div class="tug-offer"><span>${mine.game === 'chess' ? '♞' : '✕◯'} Đang chờ người nhận kèo <b>${RU.CO.names[mine.game]}</b> · <b>${mine.bet}</b> phước…</span><button class="mini-btn" data-cocancel="1">Huỷ</button></div>`
+      ${mine ? `<label>Kèo của bạn</label><div class="tug-offer"><span>${mine.game === 'chess' ? '♞' : '✕◯'} ${mine.tang ? '🧘 <b>Đường Tăng</b> đang ra Đình Cờ nhận kèo' : 'Đang chờ người nhận kèo'} <b>${RU.CO.names[mine.game]}</b> · <b>${mine.bet}</b> phước…<small class="offer-exp" data-exp="${mine.exp || ''}"></small></span><button class="mini-btn" data-cocancel="1">Huỷ</button></div>`
         : `<label>Ra kèo ${RU.CO.names[coGame].toLowerCase()} · bạn có ${p.phuoc} phước</label><div class="bets">${RU.CO.bets.map(b => `<button data-cobet="${b}" ${p.phuoc < b ? 'disabled' : ''}>${b} 🍀</button>`).join('')}</div>`}
       ${S.demo ? '<p class="muted small">Bản demo: một bạn đồng tu (bot) sẽ nhận kèo sau vài giây.</p>' : ''}
     </div><div>
-      <label>Kèo đang chờ</label>${others.length ? others.map(o => `<div class="tug-offer"><span>${o.game === 'chess' ? '♞' : '✕◯'} <b>${esc(o.name)}</b> · ${RU.CO.names[o.game]} · cược <b>${o.bet}</b> phước</span><button class="mini-btn" data-coaccept="${o.id}" ${p.phuoc < o.bet ? 'disabled title="Không đủ phước"' : ''}>Nhận kèo</button></div>`).join('') : '<p class="muted small">Chưa có ai ra kèo. Ra kèo trước đi!</p>'}
+      <label>Kèo đang chờ</label>${others.length ? others.map(o => `<div class="tug-offer"><span>${o.game === 'chess' ? '♞' : '✕◯'} <b>${esc(o.name)}</b> · ${RU.CO.names[o.game]} · cược <b>${o.bet}</b> phước</span>${o.tang ? '<small class="muted"> · 🧘 Đường Tăng đang tới</small>' : ''}<button class="mini-btn" data-coaccept="${o.id}" ${p.phuoc < o.bet ? 'disabled title="Không đủ phước"' : ''}>Nhận kèo</button></div>`).join('') : '<p class="muted small">Chưa có ai ra kèo. Ra kèo trước đi!</p>'}
       <label>Đang đấu</label>${st.games.length ? st.games.map(g => `<div class="co-live">${g.game === 'chess' ? '♞' : '✕◯'} <b>${esc(g.xName)}</b> ⚔️ <b>${esc(g.oName)}</b> <span class="muted">· ${RU.CO.names[g.game]} · ${g.bet} phước · bàn ${g.table + 1}</span></div>`).join('') : '<p class="muted small">Các bàn đang trống.</p>'}
     </div></div>`);
 }
@@ -1595,6 +1599,7 @@ function coDraw() {
   }
 }
 
+setInterval(() => document.querySelectorAll('.offer-exp[data-exp]').forEach(el => { const ms = +el.dataset.exp - (Date.now() + S.serverOffset); if (!+el.dataset.exp) return; el.textContent = ms > 0 ? ` · tự huỷ sau ${coFmt(ms)} nếu không ai nhận` : ' · đang huỷ…'; }), 1000);
 /* ---------------- Thông báo chạy chữ (admin gửi) ---------------- */
 const AN_TAG = { info: '📣 THÔNG BÁO', event: '🎉 SỰ KIỆN', warn: '⚠️ CHÚ Ý' };
 function setAnnounce(a, fresh) {
