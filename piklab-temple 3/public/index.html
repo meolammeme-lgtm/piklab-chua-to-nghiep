@@ -120,6 +120,10 @@
   <div class="card mg" id="mgCard"></div>
 </div>
 <div id="wxLayer"></div>
+<!-- Khung lớn: bảng sám hối, lớp thầy đồ, phóng sinh -->
+<div id="xModal" class="modal-wrap hidden">
+  <div class="card wide" id="xCard"></div>
+</div>
 
 <!-- Kết quả đào -->
 <div id="resultModal" class="modal-wrap hidden">
@@ -173,9 +177,9 @@
   <button id="tugBtn">Ctrl+Z · Z · Space — KÉO!</button>
 </div>
 
-<!-- Bãi khẩu nghiệp -->
-<form id="sayBar" class="hidden glass" onsubmit="return false">
-  <span>📢</span><input id="sayInput" maxlength="80" placeholder="Xả hết bực dọc ở đây… (mỗi câu tốn phước)" autocomplete="off"><button id="sayBtn" type="submit">Hét!</button>
+<!-- Khẩu nghiệp: gõ ở đâu cũng được -->
+<form id="sayBar" class="glass hidden" onsubmit="return false">
+  <span>🗯️</span><input id="sayInput" maxlength="80" placeholder="Enter -1 phước" autocomplete="off"><button id="sayBtn" type="submit">Khẩu Nghiệp</button>
 </form>
 
 <div id="toast"></div>
