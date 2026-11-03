@@ -38,9 +38,11 @@
   <div class="hud-bl">
     <button class="emote glass" data-e="pray" title="Chắp tay">🙏</button>
     <button class="emote glass" data-e="bow" title="Vái lạy">🙇</button>
-    <button class="emote glass" data-e="zen" title="Tĩnh tâm">🧘</button>
+    <button class="emote glass" data-pose="rest" title="Ngồi xuống (đi là đứng dậy)">🧘</button>
     <button class="emote glass" data-e="heart" title="Thương">💛</button>
     <button class="emote glass" data-e="wave" title="Chào">👋</button>
+    <button class="emote glass" id="emoteMoreBtn" title="Hành động khác" aria-expanded="false">➕</button>
+    <div id="emoteMore" class="emote-more glass hidden"><b>Hành động khác</b><div class="em-grid"></div></div>
   </div>
   <button id="actionBtn" class="hidden"><span id="actionIcon">🪔</span><span id="actionText">Thắp hương</span><kbd>E</kbd></button>
   <canvas id="minimap" class="glass" width="200" height="230" title="Bấm để đi tới"></canvas>
