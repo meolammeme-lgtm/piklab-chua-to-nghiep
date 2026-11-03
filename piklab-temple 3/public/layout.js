@@ -69,6 +69,11 @@
   const cauSeats = [0, 1, 2, 3, 4].map(i => ({ id: i, x: market.cau.x - 250 + i * 125, y: market.cau.y }));
   // 4 bàn cờ: người đi trước ngồi phía tây (quay mặt sang đông), người đi sau ngồi phía đông
   const coTables = [0, 1, 2, 3].map(i => { const x = market.co.x - 195 + i * 130, y = market.co.y + 15; return { id: i, x, y, seats: [{ x: x - 52, y, yaw: Math.PI / 2 }, { x: x + 52, y, yaw: -Math.PI / 2 }] }; });
+  // Đường đi tuần của Đường Tăng: các điểm nối nhau bằng đoạn thẳng không vướng vật cản (dọc lối lát gạch)
+  const tangNodes = { A: [1400, 1900], K: [1400, 1490], B: [1400, 1300], C: [1250, 1200], D: [1150, 760], E: [700, 740], F: [430, 690], G: [1650, 760], H: [2085, 740], I: [2370, 690], L: [960, 1490], M: [1830, 1490],
+    X1: [1400, 2110], X2: [1400, 2620], X3: [1830, 2620] };                    // X*: đường ra cổng xuống phố chợ tới Đình Cờ
+  const tangEdges = [['A', 'K'], ['K', 'B'], ['B', 'C'], ['C', 'D'], ['D', 'E'], ['E', 'F'], ['D', 'G'], ['G', 'H'], ['H', 'I'], ['K', 'L'], ['K', 'M'], ['A', 'X1'], ['X1', 'X2'], ['X2', 'X3']];
+  const tangStops = ['F', 'I', 'L', 'M', 'D', 'G', 'C'];                         // chỗ dừng chân chắp tay, ngó nghiêng tìm Ngộ Không
   const leaves = [];
   for (let i = 0; i < 12; i++) { const a = (70 + i * 24) * Math.PI / 180, r = 175 + (i % 3) * 35; leaves.push({ id: i, x: Math.round(market.banyan.x + Math.cos(a) * r), y: Math.round(market.banyan.y + Math.sin(a) * r * .62) }); }
 
@@ -136,7 +141,7 @@
 
   return {
     W, H, GATE_Y, HALL, hp,
-    spawn: { x: 1400, y: 3010 }, river, wharf, release, samhoi, cauSeats, coTables,
+    spawn: { x: 1400, y: 3010 }, river, wharf, release, samhoi, cauSeats, coTables, tangNodes, tangEdges, tangStops,
     hall, altar, bowl, bell, bellYard, garden, pen, pond, gate, cushions, rockeries, stupas, well, scarecrow, hut, coop, shed, kennel, nest, fortuneYard,
     plots, animals, trees, lanterns: [], solids, market, leaves, paths, noGrass,
     leafRadius: 75, plotRadius: 70, animalRadius: 130, fishRadius: 270, cushionRadius: 60
