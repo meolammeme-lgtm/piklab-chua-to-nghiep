@@ -99,7 +99,7 @@ function build(R, L) {
   const blocked = (x, z) => { const X = x / k, Z = z / k;
     if (L.noGrass.some(([a, b, c, d]) => X > a && X < c && Z > b && Z < d)) return true;
     if (Math.hypot((X - L.pond.x) / (L.pond.rx + 40), (Z - L.pond.y) / (L.pond.ry + 30)) < 1) return true;
-    return Math.hypot(X - L.market.shout.x, Z - L.market.shout.y) < L.market.shout.r + 20; };
+    return false; };
   const nBlades = Math.round(420 * (WW * D) / (20 * 23));
   for (let i = 0; i < nBlades; i++) {
     const x = .7 + r() * (WW - 1.4), z = .7 + r() * (D - 1.4);
@@ -114,8 +114,7 @@ function build(R, L) {
   const GZ = L.GATE_Y * k + .25, GX = L.gate.x * k;
   wallSeg(WX, .32, WW - .4, .44, 1.0); wallSeg(.32, DZ, .44, D - .8, .8); wallSeg(WW - .32, DZ, .44, D - .8, .8);
   wallSeg((GX - .75) / 2 + .1, GZ, GX - .95, .4, .55); wallSeg((GX + .75 + WW - .2) / 2, GZ, WW - GX - .95, .4, .55);
-  wallSeg((GX - 1.4) / 2 + .1, D - .32, GX - 1.6, .4, .5); wallSeg((GX + 1.4 + WW - .2) / 2, D - .32, WW - GX - 1.6, .4, .5);   // tường chợ, chừa lối vào
-  for (const [x, z, h] of [[.32, .32, 1.25], [WW - .32, .32, 1.25], [.32, GZ, 1.0], [WW - .32, GZ, 1.0], [.32, D - .32, .9], [WW - .32, D - .32, .9], [GX - 1.4, D - .32, 1.4], [GX + 1.4, D - .32, 1.4]]) { world.add(rb(.62, h, .62, .1), PAL.wall, T(x, h / 2, z)); world.add(rb(.74, .14, .74, .06), PAL.cap, T(x, h + .06, z)); world.add(sp(.12), PAL.gold, T(x, h + .2, z)); }
+  for (const [x, z, h] of [[.32, .32, 1.25], [WW - .32, .32, 1.25], [.32, GZ, 1.0], [WW - .32, GZ, 1.0], [.32, L.river.y0 * k - .4, .9], [WW - .32, L.river.y0 * k - .4, .9]]) { world.add(rb(.62, h, .62, .1), PAL.wall, T(x, h / 2, z)); world.add(rb(.74, .14, .74, .06), PAL.cap, T(x, h + .06, z)); world.add(sp(.12), PAL.gold, T(x, h + .2, z)); }
 
   /* ---- Chánh điện (dựng ở toạ độ gốc, phóng to L.HALL.s lần rồi dời) ---- */
   const HS = L.HALL.s, HM = M4.trs(L.HALL.ox * k, 0, L.HALL.oy * k, 0, HS, HS, HS);
@@ -505,20 +504,67 @@ function build(R, L) {
     for (const s of [-1, 1]) { world.add(rb(.05, .055, h - .2, .01), '#e9dcc0', T(x + s * 1.3, .0, z)); world.add(cy(.03, .03, 1.1, 6), '#6e5340', T(x + s * (w / 2 + .1), 0, z - h / 2)); world.add(rb(.4, .25, .02, .01), s < 0 ? '#c0392b' : '#2f6fb3', T(x + s * (w / 2 + .1) + .2 * -s, .95, z - h / 2)); }
     for (let i = 0; i < 4; i++) world.add(rb(.5, .2, .3, .05), '#a07850', T(x - 1.6 + i * 1.05, .1, z - h / 2 - .45));   // ghế dài cổ vũ
   }
-  // --- Bãi khẩu nghiệp: sân tròn + cột loa phường ---
-  { const sh = MK.shout, x = sh.x * k, z = sh.y * k;
-    world.add(cy(sh.r * k, sh.r * k, .05, 40), '#bdb2a0', T(x, -.0, z));
-    world.add(cy(sh.r * k - .25, sh.r * k - .25, .055, 40), '#c9bfae', T(x, 0, z));
-    world.add(cy(.07, .09, 2.9, 10), '#8d949a', T(x, 0, z));
-    for (const a of [.5, 2.1, 3.7, 5.2]) { world.add(cy(.04, .2, .35, 12), '#a7adb3', T(x + Math.cos(a) * .18, 2.6, z + Math.sin(a) * .18, 0, 1, 1, 1, Math.sin(a) * 1.3, -Math.cos(a) * 1.3)); }
-    world.add(cy(.05, .05, .5, 6), '#8d949a', T(x, 2.45, z, 0, 1, 1, 1, 0, 1.5708));
-    const sz = z + 1.6;                                                                       // sân khấu nhỏ
-    world.add(rb(2.2, .35, .8, .05), '#8a5a35', T(x, .175, sz)); world.add(rb(2.24, .04, .84, .02), '#c0392b', T(x, .36, sz));
-    for (const s2 of [-1, 1]) world.add(cy(.04, .04, 1.9, 6), '#5b3b22', T(x + s2 * 1.05, 0, sz + .35));
-    world.add(rb(2.1, 1.1, .04, .02), '#a8302a', T(x, 1.15, sz + .38));
-    addTex(signCanvas('XẢ GIẬN MIỄN PHÍ*', 800, 140, { bg: '#7a1f1a' }), 1.7, .3, T(x, 1.45, sz + .355, Math.PI));
-    world.add(rb(.3, .4, .25, .04), '#2b2b2b', T(x - .85, .56, sz)); world.add(cy(.09, .09, .02, 12), '#555', T(x - .85, .6, sz - .13, 0, 1, 1, 1, 1.5708));   // loa thùng
-    world.add(cy(.015, .015, .5, 4), '#888', T(x + .3, .36, sz - .1)); world.add(sp(.04, 6), '#333', T(x + .3, .88, sz - .1)); }
+  // --- Lều Thầy Đồ Bezier: chiếu cói, án thư thấp, nghiên mực, câu đối giấy đỏ treo ---
+  { const td = MK.thayDo, x = td.x * k, z = td.y * k;
+    tarp(x, z - .25, 2.8, 1.8, 2.05, '#a8302a', '#e9c46a');
+    const zz = z + .75;   // đồ đạc dời ra mép lều để nhìn thấy thầy từ trên cao
+    world.add(rb(2.4, .02, 1.3, .01), '#d9c08a', T(x, .012, zz - .45)); for (let i = 0; i < 8; i++) world.add(rb(.02, .021, 1.3, .005), '#c4a56a', T(x - 1.05 + i * .3, .013, zz - .45));   // chiếu cói
+    world.add(rb(1.3, .28, .55, .04), '#6b3a1c', T(x, .14, zz - .3)); world.add(rb(1.34, .04, .59, .02), '#3e1f0e', T(x, .3, zz - .3));   // án thư
+    world.add(rb(.9, .01, .45, .005), '#f7efe0', T(x + .05, .33, zz - .25));                                                               // giấy dó
+    world.add(rb(.18, .05, .12, .02), '#222', T(x - .45, .34, zz - .35)); world.add(cy(.012, .008, .3, 5), '#c9a065', T(x - .25, .4, zz - .27, 0, 1, 1, 1, .9));   // nghiên mực, bút lông
+    npc(x, zz - .85, { sit: true, shirt: '#2f4f7a', pants: '#2e2a2a', hat: 'none' });
+    world.add(cy(.23, .23, .1, 14), '#1d1d1d', T(x, .96, zz - .85)); world.add(cy(.235, .235, .02, 14), '#3a3a3a', T(x, 1.0, zz - .85));   // khăn xếp
+    world.add(cy(.06, 0, .22, 8), '#eeeeee', T(x, .52, zz - .67, 0, 1, 1, 1, .4));                                                         // râu bạc
+    for (const s2 of [-1, 1]) { world.add(rb(.32, 1.15, .02, .01), '#c0392b', T(x + s2 * 1.18, 1.25, z + .55)); world.add(cy(.012, .012, .4, 4), '#7d5c30', T(x + s2 * 1.18, 1.84, z + .55, 0, 1, 1, 1, 0, 1.5708)); }
+    addTex(verticalSign(['CTRL', 'ALT', 'SHIFT'], 150, 600), .26, 1.0, T(x - 1.18, 1.25, z + .565));
+    addTex(verticalSign(['NHẤN', 'GIỮ', 'KÉO'], 150, 600), .26, 1.0, T(x + 1.18, 1.25, z + .565));
+    hangSign('THẦY ĐỒ BEZIER', x, 2.0, z + .65, 1.5, '#7a2a20'); }
+
+  // --- Bãi Câu Brief: 5 ghế câu dọc bờ sông, quăng câu thẳng xuống sông, giấy brief trôi lềnh bềnh ---
+  { const c = MK.cau, x = c.x * k, z = c.y * k, rx = 3.3, rz = 0, zw = (L.river.y0 + 120) * k;
+    for (let i = 0; i < 5; i++) { const px = x - rx * .6 + i * rx * .3, pz = zw + (i % 2 ? .35 : -.1); world.add(rb(.22, .01, .3, .005), '#f7efe0', T(px, .05, pz, i * .7)); world.add(rb(.16, .011, .02, .002), '#c0392b', T(px, .055, pz - .06, i * .7)); }   // giấy brief trôi trên sông
+    for (const st of L.cauSeats) { const sx = st.x * k, sz = st.y * k;   // ghế câu gỗ + xô đựng
+      world.add(rb(.34, .05, .3, .02), '#9b6b3a', T(sx, .3, sz)); for (const [dx, dz] of [[-.13, -.11], [.13, -.11], [.13, .11], [-.13, .11]]) world.add(cy(.02, .02, .3, 5), '#6b4a2a', T(sx + dx, 0, sz + dz));
+      world.add(P.lathe([[0, 0], [.08, 0], [.1, .16], [.095, .17]], 10), '#5f8fb0', T(sx + .32, 0, sz + .05)); }
+    // chòi câu mái lá
+    { const hx = x + rx + .7, hz = z - .45; for (const [dx, dz] of [[-.45, -.4], [.45, -.4], [.45, .4], [-.45, .4]]) world.add(cy(.04, .045, 1.5, 6), '#9b7a45', T(hx + dx, 0, hz + dz));
+      world.add(P.frustum(1.4, 1.3, .1, .2, .5), '#c9a65a', T(hx, 1.5, hz)); world.add(rb(.9, .35, .5, .03), '#8a5a35', T(hx, .18, hz)); for (let i = 0; i < 3; i++) world.add(cy(.012, .012, 1.4, 4), '#7d5c30', T(hx - .3 + i * .1, 0, hz + .38, 0, 1, 1, 1, .25)); }
+    hangSign('BÃI CÂU BRIEF', x - rx + .2, 1.3, z - .2, 1.1, '#23466b');   // bảng tên giữa sạp Cô Ba và ghế đầu tiên
+    for (const s2 of [-1, 1]) world.add(cy(.03, .03, 1.3, 6), '#7d5c30', T(x - rx + .2 + s2 * .58, 0, z - .22)); }
+
+  // --- Sông cuối đường: mặt nước, bờ đá, lau sậy, bến gỗ, đò ---
+  { const rv = L.river, z0 = rv.y0 * k, z1 = (L.H + 30) * k, zc = (z0 + z1) / 2;
+    water.add(rb(WW + .6, .06, z1 - z0 + .1, .02), '#5f9fb0', T(WX, .0, zc));
+    for (let x = .2; x < WW; x += .34) { if (Math.abs(x - L.wharf.x * k) < .95) continue; world.add(sp(.2 + r() * .08, 8), r() > .5 ? '#bdb6a6' : '#a59d8b', T(x, .04, z0 + .02 + r() * .08, r() * 3, 1.4, .5, 1)); }
+    for (let i = 0; i < 26; i++) { const x = .6 + r() * (WW - 1.2); if (Math.abs(x - L.wharf.x * k) < 1.3 || Math.abs(x - MK.cau.x * k) < 3.2) continue; for (let j = 0; j < 5; j++) world.add(cy(.008, .015, .5 + r() * .4, 4), j % 2 ? '#7f9a4a' : '#9bb05a', T(x + (r() - .5) * .25, 0, z0 + .2 + r() * .25, 0, 1, 1, 1, (r() - .5) * .4, (r() - .5) * .4)); }
+    for (let i = 0; i < 9; i++) water.add(cy(.15, .15, .02, 12), i % 2 ? '#5d9c40' : '#4d8a33', T(.9 + i * 3.1 + r(), .045, z0 + .9 + r() * .9));   // bèo
+    const w = L.wharf, wx = w.x * k, wz0 = z0 - .4, wz1 = (w.y + w.h / 2) * k, ww = w.w * k;
+    world.add(rb(ww, .08, wz1 - wz0, .02), '#9b6b3a', T(wx, .16, (wz0 + wz1) / 2));
+    for (let zz = wz0 + .1; zz < wz1; zz += .2) world.add(rb(ww + .02, .085, .02, .005), '#7d5130', T(wx, .165, zz));
+    for (const s2 of [-1, 1]) for (let zz = z0 + .2; zz < wz1; zz += .7) world.add(cy(.06, .06, .5, 8), '#6b4a2a', T(wx + s2 * (ww / 2 - .03), -.1, zz));
+    for (const s2 of [-1, 1]) { world.add(cy(.03, .03, .55, 6), '#6b4a2a', T(wx + s2 * (ww / 2 - .03), .2, wz1 - .05)); world.add(rb(.04, .04, wz1 - z0, .01), '#7d5130', T(wx + s2 * (ww / 2 - .03), .55, (z0 + wz1) / 2)); }   // lan can
+    // con đò nhỏ neo bên bến
+    { const bx = wx + 1.6, bz = wz1 - .3; world.add(P.lathe([[0, 0], [.22, .02], [.3, .15], [.32, .22]], 12), '#6b4a2a', T(bx, .02, bz, 0, 3.0, 1, 1));
+      world.add(P.frustum(.9, .55, .1, .5, .35), '#c9a65a', T(bx, .3, bz)); world.add(cy(.012, .012, 1.2, 4), '#8a6a45', T(bx - .5, .2, bz + .3, 0, 1, 1, 1, .6)); }
+    // gánh cá Cô Ba: thúng cá, chậu nước, vợt
+    const fs = MK.fishSeller, fx = fs.x * k, fz = fs.y * k;
+    npc(fx, fz - .2, { sit: true, shirt: '#5f8a76', pants: '#2e2a2a', hat: 'non' });
+    basket(fx - .6, fz + .2, (bx, bz) => { world.add(cy(.25, .25, .02, 16), '#4f8fb0', T(bx, .2, bz)); for (let i = 0; i < 3; i++) world.add(sp(.07, 8), ['#e8743a', '#d9d2c4', '#f0b43a'][i], T(bx - .08 + i * .08, .23, bz + (i - 1) * .06, i, 1.8, .6, .8)); });
+    basket(fx + .65, fz + .2, (bx, bz) => { world.add(cy(.25, .25, .02, 16), '#4f8fb0', T(bx, .2, bz)); for (let i = 0; i < 2; i++) world.add(sp(.07, 8), ['#e05a2a', '#7a8a96'][i], T(bx - .05 + i * .1, .23, bz, i * 2, 1.8, .6, .8)); });
+    world.add(cy(.012, .012, 1.0, 4), '#8a6a45', T(fx + 1.0, 0, fz - .3, 0, 1, 1, 1, .3)); world.add(cy(.16, .16, .01, 12), '#d9d2c4', T(fx + 1.0, .95, fz - .02, 0, 1, 1, 1, 1.2));   // vợt
+    hangSign('CÁ PHÓNG SINH · CÔ BA', fx, 1.45, fz + .55, 1.6, '#23466b');
+    for (const s2 of [-1, 1]) world.add(cy(.03, .03, 1.45, 6), '#7d5c30', T(fx + s2 * .85, 0, fz + .53)); }
+
+  // --- Bảng Sám Hối ở sân lớn: khung gỗ có mái, giấy ghim nhiều màu ---
+  { const sb = L.samhoi, x = sb.x * k, z = sb.y * k, w = sb.w * k;
+    for (const s2 of [-1, 1]) world.add(cy(.07, .08, 2.1, 8), PAL.red, T(x + s2 * w / 2, 0, z));
+    world.add(rb(w, 1.15, .1, .03), '#7a4a2a', T(x, 1.15, z)); world.add(rb(w - .16, 1.0, .02, .01), '#c49a64', T(x, 1.15, z + .055));
+    world.add(P.frustum(w + .5, .7, .1, .45, .32), PAL.roof, T(x, 2.05, z));
+    for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) horn(x + sx * (w / 2 + .2), 2.08, z + sz * .3, [sx * .7, sz * .7], .45, world);
+    const notes = ['#fffaf0', '#fff1b8', '#f3e2d0', '#fde2e2', '#e2f1e6'];
+    for (let i = 0; i < 14; i++) { const nx = x - w / 2 + .35 + (i % 7) * (w - .7) / 6, ny = .85 + Math.floor(i / 7) * .5 + (r() - .5) * .06;
+      world.add(rb(.36, .32, .01, .005), notes[i % 5], T(nx, ny, z + .07, 0, 1, 1, 1, 0, (r() - .5) * .18)); world.add(sp(.025, 6), ['#c0392b', '#2f6fb3', '#2f7d4a', '#e0a020'][i % 4], T(nx, ny + .14, z + .08)); }
+    addTex(signCanvas('BẢNG SÁM HỐI NGHỀ NGHIỆP', 900, 140), w - .3, .28, T(x, 1.62, z + .07)); }
 
   // texture: hoành phi, câu đối, biển hiệu
   addTex(signCanvas('TỔ NGHIỆP DESIGNER', 1024, 160), 2.7, .42, M4.mul(HM, T(10, 2.56, 1.42)));
@@ -529,7 +575,7 @@ function build(R, L) {
   const MKs = L.market;
   gsign('VƯỜN RAU PHƯỚC ĐỨC', (L.garden.x + L.garden.w / 2) * k, L.garden.y * k - .6); gsign('NÔNG TRẠI', (L.pen.x + L.pen.w / 2) * k, L.pen.y * k - .45);
   gsign('AM XIN QUẺ', MKs.fortune.x * k - 2.0, MKs.fortune.y * k + 1.5); gsign('GÁC CHUÔNG', L.bell.x * k + 2.0, L.bell.y * k + 1.5);
-  gsign('SÂN KÉO CO', MKs.tug.x * k, (MKs.tug.y - MKs.tug.h / 2) * k - .7); gsign('BÃI KHẨU NGHIỆP', MKs.shout.x * k - 2.9, MKs.shout.y * k - 1.6); gsign('CÂY ĐA QUÉT LÁ', MKs.banyan.x * k + 2.0, MKs.banyan.y * k + 1.3);
+  gsign('SÂN KÉO CO', MKs.tug.x * k, (MKs.tug.y - MKs.tug.h / 2) * k - .7); gsign('BẾN PHÓNG SINH', L.wharf.x * k - 1.6, L.river.y0 * k - .55); gsign('CÂY ĐA QUÉT LÁ', MKs.banyan.x * k + 2.0, MKs.banyan.y * k + 1.3);
   const gateSign = { mesh: R.mesh(new Geo().add(P.quad(1.66, .4), '#ffffff', T(0, 0, .045))), m: T(tx, 3.18, tz, 0, 1, 1, 1, -.38), tex: R.texture(signCanvas('CHÙA BA PHẢI', 800, 160)), em: .35 };
 
   return {
@@ -596,6 +642,11 @@ function dynamicMeshes(R) {
   });
   m.broom = mk(g => { g.add(cy(.018, .018, .75, 6), '#a07a45', T(0, .2, 0)); g.add(cy(.03, .16, .26, 10), '#c9a85a', T(0, 0, 0, 0, 1, 1, .45)); });
   m.rope = mk(g => g.add(cy(.025, .025, 1, 6), '#c9a26a', T(0, 0, 0, 0, 1, 1, 1, 0, 1.5708)));
+  m.rod = mk(g => { g.add(cy(.018, .008, 1.7, 6), '#8a5a33', T(0, 0, 0, 0, 1, 1, 1, 1.0)); g.add(cy(.03, .03, .2, 6), '#2b2b2b', T(0, 0, 0, 0, 1, 1, 1, 1.0)); });   // cần câu chĩa lên-ra trước (+z)
+  m.line = mk(g => g.add(cy(.004, .004, 1, 3), '#f5f5f5', T(0, 0, 0)));
+  m.bobber = mk(g => { g.add(sp(.05, 8), '#e8442f', T(0, .03, 0)); g.add(sp(.05, 8), '#ffffff', T(0, -.02, 0, 0, 1, .6, 1)); });
+  m.fly = mk(g => { g.add(sp(.025, 6), '#222', T(0, 0, 0)); g.add(sp(.025, 5), '#cde', T(.03, .02, 0, 0, 1, .4, 1)); g.add(sp(.025, 5), '#cde', T(-.03, .02, 0, 0, 1, .4, 1)); });
+  m.poop = mk(g => { g.add(sp(.12, 10), '#6b3f1f', T(0, .06, 0, 0, 1, .5, 1)); g.add(sp(.09, 10), '#7a4a25', T(0, .13, 0, 0, 1, .55, 1)); g.add(sp(.055, 8), '#8a5530', T(0, .19, 0, 0, 1, .7, 1)); });
   m.flag = mk(g => { g.add(cy(.012, .012, .5, 4), '#6e5340', T(0, -.25, 0)); g.add(rb(.22, .14, .01, .005), '#c0392b', T(.11, .18, 0)); });
   m.fishW = mk(g => { g.add(sp(.12, 10), '#ffffff', T(0, 0, 0, 0, .55, .45, 1.3)); g.add(cy(0, .09, .14, 6), '#ffe0d0', T(0, 0, -.18, 0, 1, .4, 1, -1.57)); g.add(sp(.05, 6), '#ff5a2a', T(0, .04, .03)); });
   return m;
@@ -604,12 +655,14 @@ function dynamicMeshes(R) {
 /* ---------------- Nhân vật ---------------- */
 const avCache = {};
 function shade(hex, k) { const h = hex.replace('#', ''); return '#' + [0, 2, 4].map(i => Math.max(0, Math.min(255, Math.round(parseInt(h.substr(i, 2), 16) * k))).toString(16).padStart(2, '0')).join(''); }
-function avatarMeshes(R, color, hat, hair) {
+function avatarMeshes(R, color, hat, hair, outfit) {
   hair = hair || (hat === 'bald' ? 'bald' : 'bun'); if (hat === 'bald') hat = 'none';
-  const key = color + hat + hair; if (avCache[key]) return avCache[key];
+  outfit = outfit || 'trang';
+  const key = color + hat + hair + outfit; if (avCache[key]) return avCache[key];
   const mk = fn => { const g = new Geo(); fn(g); return R.mesh(g); };
   const trim = shade(color, .62), light = color.toLowerCase() === '#efe7d6';
   const inner = light ? '#d8cdb4' : '#f3ead8';
+  const GOLD = '#d4a73a', BLACK = '#2b2b30', SILK = '#f4f1ea';
   // Áo tràng / áo giao lĩnh: thân dài chấm gót, cổ chéo, đai thắt
   const robe = g => {
     g.add(P.lathe([[0, .04], [.27, .04], [.29, .07], [.25, .3], [.19, .5], [.13, .58], [0, .6]], 20), color, T(0, 0, 0));
@@ -622,7 +675,64 @@ function avatarMeshes(R, color, hat, hair) {
     g.add(rb(.055, .3, .022, .01), trim, T(.02, .43, .165, 0, 1, 1, 1, -.33, -.62));
     g.add(rb(.05, .26, .02, .01), trim, T(-.07, .45, .148, 0, 1, 1, 1, -.35, .55));
   };
-  const body = mk(robe);
+  // Hai ống quần + đôi guốc (cho các kiểu áo ngắn hơn gót)
+  const legs = (g, col, top, w) => { for (const s of [-1, 1]) { g.add(cy(w, w * 1.1, top - .02, 10), col, T(s * .085, .02, 0)); g.add(sp(.055, 8), '#3a2a20', T(s * .085, .025, .03, 0, 1, .45, 1.5)); } };
+  // bán kính thân áo (đường lathe) ở độ cao y → đặt khuy, túi, yếm nằm đúng trên mặt vải
+  const rAt = (pts, y) => { for (let i = 1; i < pts.length; i++) { const [r0, y0] = pts[i - 1], [r1, y1] = pts[i]; if (y <= y1 && y >= y0) return r0 + (r1 - r0) * (y - y0) / ((y1 - y0) || 1); } return 0; };
+  const onSurf = (pts, y, a, out = .008) => { const r = rAt(pts, y) + out; return [Math.sin(a) * r, Math.cos(a) * r]; };   // a = 0: chính giữa ngực, a > 0: lệch sang phải
+  const dot = (g, pts, y, a, col, s = .016) => { const [x, z] = onSurf(pts, y, a); g.add(sp(s, 6), col, T(x, y, z)); };
+  // Cổ đứng (áo dài, ngũ thân) và hàng khuy chéo từ cổ xuống nách phải
+  const standCollar = (g, y, col) => { g.add(cy(.078, .088, .07, 14), col, T(0, y - .025, 0)); g.add(cy(.09, .09, .012, 14), trim, T(0, y + .04, 0)); };
+  const diagButtons = (g, pts, n) => { for (let i = 0; i < n; i++) dot(g, pts, .56 - i * .05, .25 + i * .3, GOLD); };
+  const BABA = [[0, .19], [.24, .19], [.25, .22], [.23, .38], [.18, .52], [.12, .58], [0, .6]];
+  const AODAI = [[0, .3], [.18, .3], [.2, .36], [.19, .45], [.15, .53], [.11, .58], [0, .6]];
+  const NGU = [[0, .12], [.25, .12], [.26, .15], [.23, .32], [.19, .48], [.13, .58], [0, .6]];
+  const SKIRT = [[0, .03], [.25, .03], [.27, .06], [.23, .3], [0, .31]], COAT = [[0, .26], [.22, .26], [.21, .38], [.17, .5], [.12, .58], [0, .6]];
+  const ROBE = [[0, .04], [.27, .04], [.29, .07], [.25, .3], [.19, .5], [.13, .58], [0, .6]];
+  const OUT = {
+    trang: robe,
+    // Áo bà ba: áo ngắn ngang hông, khuy giữa, hai túi, xẻ tà hai bên; quần đen ống rộng
+    baba: g => {
+      legs(g, BLACK, .24, .095);
+      g.add(P.lathe(BABA, 20), color, T(0, 0, 0)); g.add(cy(.245, .25, .02, 20), trim, T(0, .19, 0));
+      for (let i = 0; i < 4; i++) dot(g, BABA, .27 + i * .075, 0, inner);
+      for (const s of [-1, 1]) { const [x, z] = onSurf(BABA, .25, s * .45, .006); g.add(rb(.07, .06, .012, .006), trim, T(x, .25, z, s * .45)); g.add(rb(.012, .07, .03, .004), BLACK, T(s * .25, .23, 0)); }
+      g.add(cy(.105, .115, .025, 14), trim, T(0, .575, 0));
+    },
+    // Áo dài: thân ôm, cổ đứng, hai tà trước sau dài tới cổ chân, quần lụa trắng
+    aodai: g => {
+      legs(g, SILK, .34, .08);
+      g.add(P.lathe(AODAI, 20), color, T(0, 0, 0));
+      for (const z of [1, -1]) { g.add(rb(.2, .29, .016, .008), color, T(0, .17, z * .165, 0, 1, 1, 1, z * .07)); g.add(rb(.205, .014, .02, .004), trim, T(0, .03, z * .175, 0, 1, 1, 1, z * .07)); }
+      standCollar(g, .6, color); diagButtons(g, AODAI, 3);
+    },
+    // Áo ngũ thân: rộng hơn áo dài, dài quá gối, cổ đứng, khuy chéo vai, quần sẫm
+    nguthan: g => {
+      legs(g, '#3a2f2a', .14, .085);
+      g.add(P.lathe(NGU, 20), color, T(0, 0, 0)); g.add(cy(.255, .26, .025, 20), trim, T(0, .12, 0));
+      for (const s of [-1, 1]) g.add(rb(.014, .14, .03, .004), trim, T(s * .25, .2, 0));      // đường xẻ tà hai bên
+      standCollar(g, .6, trim); diagButtons(g, NGU, 4);
+    },
+    // Áo tứ thân: váy đen, áo ngoài, yếm đỏ, thắt lưng bao xanh buông hai dải, hai vạt trước buông
+    tuthan: g => {
+      g.add(P.lathe(SKIRT, 20), BLACK, T(0, 0, 0)); g.add(P.lathe(COAT, 20), color, T(0, 0, 0));
+      { const [, z] = onSurf(COAT, .43, 0, .012); g.add(rb(.17, .22, .02, .02), '#c0392b', T(0, .43, z, 0, 1, 1, 1, -.25)); }   // yếm
+      for (const s of [-1, 1]) { const [x, z] = onSurf(SKIRT, .2, s * .3, .012); g.add(rb(.06, .28, .016, .008), color, T(x, .19, z, s * .3)); }
+      g.add(cy(.25, .245, .05, 18), '#6fae5a', T(0, .27, 0));                                   // thắt lưng bao
+      for (const s of [-1, 1]) { const [x, z] = onSurf(SKIRT, .17, s * .1, .03); g.add(rb(.04, .2, .014, .007), '#6fae5a', T(x, .17, z, 0, 1, 1, 1, .06, s * .1)); }
+    },
+    // Áo nhật bình: áo dài chấm gót, cổ vuông lớn phủ vai, vạt cổ trước sau viền kim tuyến
+    nhatbinh: g => {
+      g.add(P.lathe(ROBE, 20), color, T(0, 0, 0)); g.add(cy(.285, .29, .05, 20), GOLD, T(0, .04, 0));
+      g.add(cy(.3, .3, .018, 24), GOLD, T(0, .52, 0)); g.add(cy(.28, .28, .022, 24), trim, T(0, .525, 0));
+      for (const z of [1, -1]) {
+        const zz = z * (rAt(ROBE, .38) + .02);
+        g.add(rb(.2, .26, .02, .01), GOLD, T(0, .38, zz)); g.add(rb(.16, .21, .02, .01), trim, T(0, .385, zz + z * .008));
+        for (let i = 0; i < 3; i++) g.add(sp(.018, 6), GOLD, T(-.05 + i * .05, .4, zz + z * .022));
+      }
+    }
+  };
+  const body = mk(OUT[outfit] || robe);
   // Tay áo rộng buông hai bên
   const armsSide = mk(g => { for (const s of [-1, 1]) { g.add(sp(.085, 10), color, T(s * .22, .38, 0, 0, .95, 1.6, 1.05, 0, s * .22)); g.add(sp(.095, 10), color, T(s * .26, .25, .01, 0, 1.15, .8, 1.25)); g.add(sp(.05, 8), PAL.skin, T(s * .27, .19, .04)); } });
   // Tay áo đưa ra trước, hai bàn tay chắp trước ngực
@@ -636,6 +746,12 @@ function avatarMeshes(R, color, hat, hair) {
     g.add(rb(.05, .2, .02, .01), trim, T(.02, .4, .16, 0, 1, 1, 1, -.3, -.6));
     for (const s of [-1, 1]) g.add(sp(.085, 10), color, T(s * .15, .3, .12, 0, 1.1, .8, 1.2, 0, s * .4));
     g.add(sp(.05, 8), PAL.skin, T(-.03, .3, .22)); g.add(sp(.05, 8), PAL.skin, T(.03, .3, .22));
+    // điểm nhận diện từng kiểu áo khi ngồi
+    const SIT = [[0, .1], [.21, .1], [.18, .4], [.12, .5], [0, .52]];
+    if (outfit === 'aodai' || outfit === 'nguthan') { standCollar(g, .52, outfit === 'aodai' ? color : trim); for (let i = 0; i < 3; i++) dot(g, SIT, .47 - i * .05, .35 + i * .3, GOLD); }
+    if (outfit === 'baba') for (let i = 0; i < 2; i++) dot(g, SIT, .43 - i * .05, 0, inner);
+    if (outfit === 'tuthan') { const [, z] = onSurf(SIT, .4, 0, .012); g.add(rb(.14, .14, .02, .02), '#c0392b', T(0, .4, z, 0, 1, 1, 1, -.4)); }
+    if (outfit === 'nhatbinh') { g.add(cy(.27, .27, .018, 24), GOLD, T(0, .44, 0)); g.add(cy(.25, .25, .022, 24), trim, T(0, .445, 0)); }
   });
   const head = mk(g => {
     g.add(sp(.27, 16), PAL.skin, T(0, 0, 0));
@@ -644,10 +760,25 @@ function avatarMeshes(R, color, hat, hair) {
     if (hair === 'bald') {
       g.add(sp(.272, 16), shade(PAL.skin, .93), T(0, .03, -.02, 0, 1, .96, 1));
       if (!lowHat && !bigHat) for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) g.add(sp(.012, 4), '#c9a07a', T(-.05 + i * .05, .2 + j * .05, .12 - j * .03));
-    } else if (lowHat) g.add(sp(.272, 12), PAL.hair, T(0, -.03, -.07, 0, 1, .88, .9));          // tóc lộ ra dưới khăn/mũ
-    else {
-      g.add(sp(.285, 14), PAL.hair, T(0, hair === 'short' ? .07 : .05, -.05, 0, 1, hair === 'short' ? .88 : .95, .98));
-      if (hair === 'bun' && hat !== 'non' && hat !== 'quaithao') { g.add(sp(.11, 10), PAL.hair, T(0, .3, -.1)); g.add(cy(.06, .06, .04, 10), '#c9a862', T(0, .24, -.09, 0, 1, 1, 1, -.4)); }
+    } else if (hair === 'mohawk') {                         // hai bên cạo sát, chỏm tóc dựng thành mào giữa đầu
+      g.add(sp(.272, 16), shade(PAL.skin, .9), T(0, .03, -.02, 0, 1, .96, 1));
+      if (!lowHat && !bigHat) for (let i = 0; i < 6; i++) { const a = -.35 + i * .42; g.add(cy(0, .045, .13, 6), PAL.hair, T(0, .03 + Math.cos(a) * .26, -.02 + Math.sin(a) * -.26, 0, 1, 1, 1, -a)); }
+      else g.add(rb(.07, .06, .4, .03), PAL.hair, T(0, .26, -.05));
+    } else {
+      if (lowHat) g.add(sp(.272, 12), PAL.hair, T(0, -.03, -.07, 0, 1, .88, .9));               // tóc lộ ra dưới khăn/mũ
+      else if (hair === 'bob') {                             // tóc ngố: phủ kín hai bên tới cằm, mái bằng trước trán
+        g.add(sp(.3, 14), PAL.hair, T(0, .04, -.04, 0, 1.06, .95, 1.04));
+        g.add(rb(.4, .09, .06, .03), PAL.hair, T(0, .15, .21, 0, 1, 1, 1, -.3));
+        for (const s of [-1, 1]) g.add(sp(.11, 10), PAL.hair, T(s * .24, -.07, -.01, 0, .9, 1.9, 1.3));
+      } else if (hair === 'curly') {                         // xoăn mì tôm: nhiều lọn tròn bồng quanh đầu
+        g.add(sp(.285, 14), PAL.hair, T(0, .06, -.05, 0, 1, .92, .98));
+        if (!bigHat) for (let i = 0; i < 24; i++) { const a = i * 2.4, b = .15 + (i % 6) * .22; g.add(sp(.075, 7), PAL.hair, T(Math.sin(a) * Math.sin(b) * .29, .06 + Math.cos(b) * .29, -.05 + Math.cos(a) * Math.sin(b) * .29)); }
+      } else g.add(sp(.285, 14), PAL.hair, T(0, hair === 'short' ? .07 : .05, -.05, 0, 1, hair === 'short' || hair === 'ponytail' ? .88 : .95, .98));
+      if (hair === 'bun' && !lowHat && hat !== 'non' && hat !== 'quaithao') { g.add(sp(.11, 10), PAL.hair, T(0, .3, -.1)); g.add(cy(.06, .06, .04, 10), '#c9a862', T(0, .24, -.09, 0, 1, 1, 1, -.4)); }
+      // phần tóc buông sau lưng vẫn lộ ra dưới mũ nón
+      if (hair === 'long') { g.add(sp(.27, 12), PAL.hair, T(0, -.22, -.17, 0, 1, 1.55, .5)); for (const s of [-1, 1]) g.add(sp(.085, 8), PAL.hair, T(s * .245, -.13, -.04, 0, 1, 2.2, 1)); }
+      if (hair === 'braid') { g.add(sp(.06, 8), '#c0392b', T(0, -.1, -.27)); for (let i = 0; i < 6; i++) g.add(sp(.07 - i * .006, 8), PAL.hair, T(0, -.17 - i * .085, -.29 - i * .012, 0, 1, 1.2, 1)); }
+      if (hair === 'ponytail') { g.add(cy(.05, .05, .04, 10), '#c9a862', T(0, .1, -.27, 0, 1, 1, 1, -1.3)); g.add(sp(.095, 10), PAL.hair, T(0, -.08, -.34, 0, 1, 2.3, 1, .25)); }
     }
     for (const s of [-1, 1]) { g.add(sp(.038, 8), '#2a1a10', T(s * .09, -.01, .245, 0, 1, 1.25, .6)); g.add(sp(.012, 4), '#ffffff', T(s * .09 + .012, .015, .27)); g.add(sp(.045, 8), '#e9a297', T(s * .16, -.07, .2, 0, 1, .6, .5)); g.add(sp(.06, 8), PAL.skin, T(s * .27, -.02, 0, 0, .5, 1, .8)); }
     g.add(rb(.06, .015, .02, .007), '#7a3a2a', T(0, -.1, .262));
