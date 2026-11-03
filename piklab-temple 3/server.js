@@ -549,10 +549,16 @@ function handleClient(ws, req) {
         if (me.moving && me.pose) { me.pose = ''; me.chant = null; me.cast = null; freeSeat(); broadcast(room, { t: 'pose', id: me.id, pose: '' }); }
         break;
       }
+      case 'rest': {                       // ngồi / ngủ gật tại chỗ: giữ nguyên tới khi di chuyển
+        const pose = RULES.POSES[m.pose] ? m.pose : '';
+        if (me.coGid || me.chant || me.pose === 'fish' || (pose && me.pose === 'sit')) return;
+        const yaw = +m.yaw; me.pose = pose;
+        return broadcast(room, { t: 'pose', id: me.id, pose, x: Math.round(me.x), y: Math.round(me.y), yaw: isFinite(yaw) ? yaw : 0 });
+      }
       case 'emote': {
         if (Date.now() - me.lastEmote < 800) return;
         me.lastEmote = Date.now();
-        const e = ['pray', 'bow', 'heart', 'wave', 'zen'].includes(m.e) ? m.e : 'pray';
+        const e = RULES.EMOTES[m.e] ? m.e : 'pray';
         broadcast(room, { t: 'emote', id: me.id, e });
         break;
       }
