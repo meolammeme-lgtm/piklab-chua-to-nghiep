@@ -278,7 +278,7 @@ function makeRoom(num) {
     clients: new Map(),
     plots: LAYOUT.plots.map(p => ({ id: p.id, state: 'ripe', regrowAt: 0 })),
     leaves: LAYOUT.leaves.map(l => ({ id: l.id, state: 'full', regrowAt: 0 })),
-    tug: { offers: new Map(), match: null }, seats: Array(RULES.CAU.seats).fill(null), co: { offers: new Map(), games: new Map() },
+    tug: { offers: new Map(), match: null }, seats: Array(RULES.CAU.seats).fill(null), co: { offers: new Map(), games: new Map() }, tang: tangNew(),
     incense: [], createdAt: Date.now(), emptySince: 0
   };
   rooms.set(room.id, room);
@@ -452,6 +452,7 @@ async function handleAuth(p, req, res, ip) {
     if (String(b.password || '').length < 6) return json(res, 400, { error: 'Mật khẩu cần ít nhất 6 ký tự.' });
     if (name.length < 2) return json(res, 400, { error: 'Pháp danh cần ít nhất 2 ký tự.' });
     if (db.accounts[email]) return json(res, 409, { error: 'Email này đã có tài khoản — hãy chọn “Đã có tài khoản” để đăng nhập.' });
+    if (normName(name) === normName(RULES.TANG.name)) return json(res, 409, { error: 'Pháp danh này là của Đường Tăng rồi, chọn tên khác nhé 🙏' });
     if (Object.values(db.accounts).some(a => normName(a.name) === normName(name))) return json(res, 409, { error: 'Pháp danh này đã có người dùng, hãy chọn tên khác nhé.' });
     if (peek('reg:' + ip, 86400e3) >= db.config.maxAccountsPerIpPerDay) return json(res, 429, { error: 'Thiết bị/mạng này đã tạo quá nhiều tài khoản hôm nay. Vui lòng thử lại vào ngày mai.' });
     hit('reg:' + ip, 1e9, 86400e3);
@@ -527,7 +528,7 @@ function handleClient(ws, req) {
         room.clients.set(me.id, me);
         ws.send({
           t: 'welcome', you: pub(me), room: { id: room.id, name: room.name, num: room.num, capacity: db.config.roomCapacity },
-          players: [...room.clients.values()].filter(c => c !== me).map(pub),
+          players: [...room.clients.values()].filter(c => c !== me).map(pub).concat(pub(room.tang)),
           plots: room.plots, incense: room.incense, altar: db.config.altar,
           templeName: db.config.templeName, shopUrl: db.config.shopUrl,
           profile: profileOf(pid), pid, rooms: roomList(), serverTime: Date.now(), regrowSec: db.config.plotRegrowSec,
@@ -544,7 +545,7 @@ function handleClient(ws, req) {
         if (!isFinite(x) || !isFinite(y)) return;
         me.x = Math.max(0, Math.min(LAYOUT.W, x)); me.y = Math.max(0, Math.min(LAYOUT.H, y));
         me.dir = m.dir === -1 ? -1 : 1; me.moving = !!m.moving;
-        me.dirtyMove = true;
+        me.dirtyMove = true; leftZones();
         if (me.moving && me.pose) { me.pose = ''; me.chant = null; me.cast = null; freeSeat(); broadcast(room, { t: 'pose', id: me.id, pose: '' }); }
         break;
       }
@@ -698,6 +699,10 @@ function handleClient(ws, req) {
       }
     }
   };
+  function leftZones() {                               // rời sân kéo co / Đình Cờ thì kèo đang chờ tự huỷ, không bị bắt chơi khi đã đi chỗ khác
+    if (room.tug.offers.has(me.id) && !inTug()) { room.tug.offers.delete(me.id); broadcast(room, { t: 'tugState', tug: tugState(room) }); ws.send({ t: 'toast', msg: 'Bạn rời sân kéo co nên kèo đã tự huỷ 🪢' }); }
+    if (room.co.offers.has(me.id) && !inCo()) { room.co.offers.delete(me.id); broadcast(room, { t: 'coState', co: coState(room) }); ws.send({ t: 'toast', msg: 'Bạn rời Đình Cờ nên kèo cờ đã tự huỷ ♟️' }); }
+  }
   function tired() { ws.send({ t: 'tired', profile: profileOf(me.pid) }); }
   function freeSeat() { if (me && room && me.seat !== undefined && me.seat !== null) { if (room.seats[me.seat] === me.id) room.seats[me.seat] = null; me.seat = null; } }
   function look() { const acc = accOf(me.pid); me.color = acc.color; me.hat = acc.hat; me.hair = acc.hair; me.outfit = acc.outfit; broadcast(room, { t: 'look', id: me.id, color: me.color, hat: me.hat, hair: me.hair, outfit: me.outfit }); saveSoon(); }
@@ -944,7 +949,9 @@ function handleClient(ws, req) {
       case 'coDraw': {
         const g = myCo(); if (!g) return;
         if (g.drawBy && g.drawBy !== me.id) return endCo(room, g, null, 'agree');
-        g.drawBy = me.id; return coSend(room, g);
+        g.drawBy = me.id; coSend(room, g);
+        if (g.tang) setTimeout(() => { if (g.over || g.drawBy !== me.id) return; if (Math.random() < .35) return endCo(room, g, null, 'agree'); g.drawBy = null; tangSay(room, 'Bần tăng còn muốn đánh tiếp, thí chủ cứ bình tâm.'); coSend(room, g); }, 1500);
+        return;
       }
       case 'tugCancel': room.tug.offers.delete(me.id); return broadcast(room, { t: 'tugState', tug: tugState(room) });
       case 'tugAccept': {
@@ -1006,13 +1013,118 @@ function samhoiMine(pid) { const now = Date.now(), l = Object.values(db.samhoi).
 setInterval(() => { const now = Date.now(); let n = 0; for (const k in db.samhoi) if (now - db.samhoi[k].t > RULES.SAMHOI.ttl) { delete db.samhoi[k]; n++; } if (n) save(); }, 600e3);
 /* ---------- Đình Cờ ---------- */
 function coState(room) {
-  return { offers: [...room.co.offers.values()].map(o => ({ id: o.id, name: o.name, game: o.game, bet: o.bet })),
+  return { offers: [...room.co.offers.values()].map(o => ({ id: o.id, name: o.name, game: o.game, bet: o.bet, exp: o.t + RULES.OFFER_TTL, tang: room.tang.offerId === o.id })),
     games: [...room.co.games.values()].map(g => ({ id: g.id, game: g.game, bet: g.bet, xName: g.names[g.x], oName: g.names[g.o], table: g.table })) };
 }
+/* ---------- Đường Tăng: NPC đi khắp chùa tìm Ngộ Không, thỉnh thoảng ra Đình Cờ nhận kèo chưa ai nhận ---------- */
+function tangNew() {
+  const T = RULES.TANG, [x, y] = LAYOUT.tangNodes.A;
+  return { id: T.id, name: T.name, color: T.color, hat: T.hat, hair: T.hair, outfit: T.outfit, x, y, dir: 1, moving: false, pose: '', node: 'A', prev: null, path: [], wait: 3, mode: 'walk', offerId: null, sayAt: Date.now() + 6000 + Math.random() * 8000, dirtyMove: true };
+}
+const tangSay = (room, text) => broadcast(room, { t: 'npcSay', id: RULES.TANG.id, text });
+function tangRoute(from, to) {                         // đường ngắn nhất trên đồ thị đi tuần (BFS)
+  const nb = n => LAYOUT.tangEdges.filter(e => e.includes(n)).map(e => e[0] === n ? e[1] : e[0]), prev = { [from]: null }, q = [from];
+  while (q.length) { const n = q.shift(); if (n === to) break; for (const m of nb(n)) if (!(m in prev)) { prev[m] = n; q.push(m); } }
+  const out = []; for (let n = to; n && n !== from; n = prev[n]) out.unshift(n); return out;
+}
+function tangGo(t, nodes, extra) { t.path = nodes.map(n => ({ x: LAYOUT.tangNodes[n][0], y: LAYOUT.tangNodes[n][1], node: n })).concat(extra || []); }
+function tangStep(room, dt) {
+  const t = room.tang, now = Date.now();
+  if (t.mode === 'play') return;
+  if (t.path.length) {
+    const w = t.path[0], dx = w.x - t.x, dy = w.y - t.y, d = Math.hypot(dx, dy), sp = RULES.TANG.speed * dt;
+    if (t.pose) { t.pose = ''; broadcast(room, { t: 'pose', id: t.id, pose: '' }); }
+    if (d <= sp) { t.x = w.x; t.y = w.y; if (w.node) t.node = w.node; t.path.shift(); } else { t.x += dx / d * sp; t.y += dy / d * sp; t.dir = dx >= 0 ? 1 : -1; }
+    t.moving = t.path.length > 0; t.dirtyMove = true;
+    if (!t.path.length) tangArrive(room);
+    return;
+  }
+  if (t.mode !== 'walk') return;
+  if (now > t.sayAt) { t.sayAt = now + 14000 + Math.random() * 16000; if (room.clients.size) tangSay(room, RULES.TANG_SAYS[Math.random() * RULES.TANG_SAYS.length | 0]); }
+  if ((t.wait -= dt) > 0) return;
+  const nb = LAYOUT.tangEdges.filter(e => e.includes(t.node)).map(e => e[0] === t.node ? e[1] : e[0]).filter(n => !n.startsWith('X'));
+  const choices = nb.length > 1 ? nb.filter(n => n !== t.prev) : nb, next = choices[Math.random() * choices.length | 0];
+  t.prev = t.node; tangGo(t, [next]);
+}
+function tangArrive(room) {
+  const t = room.tang;
+  if (t.mode === 'walk') {
+    const stop = LAYOUT.tangStops.includes(t.node);
+    t.wait = stop ? 4 + Math.random() * 5 : .3;
+    if (stop) broadcast(room, { t: 'emote', id: t.id, e: Math.random() < .5 ? 'pray' : 'zen' });
+  } else if (t.mode === 'go') tangSitDown(room);
+  else if (t.mode === 'back') { t.mode = 'walk'; t.node = 'A'; t.prev = 'X1'; t.wait = 2; }
+}
+function tangLookForGame(room) {                        // vài giây xét một lần: kèo cờ đã chờ lâu mà chưa ai nhận → thỉnh thoảng đi nhận
+  const t = room.tang, now = Date.now(); if (t.mode !== 'walk' || t.path.length > 1) return;
+  const busy = new Set([...room.co.games.values()].map(g => g.table));
+  if (busy.size >= LAYOUT.coTables.length) return;
+  const o = [...room.co.offers.values()].find(o => now - o.t > 20e3 && o.t + RULES.OFFER_TTL - now > 35e3);
+  if (!o || Math.random() > .35) return;
+  const table = [...LAYOUT.coTables.filter(tb => (o.game === 'chess') === (tb.id < 2)), ...LAYOUT.coTables].find(tb => !busy.has(tb.id));
+  t.mode = 'go'; t.offerId = o.id; t.table = table.id;
+  const approach = { x: table.x, y: 2870 };
+  const cur = t.path[0]; tangGo(t, [...tangRoute(cur ? cur.node : t.node, 'A'), 'X1', 'X2', 'X3'], [approach]); if (cur) t.path.unshift(cur);
+  tangSay(room, 'Ngộ Không đâu chẳng thấy… thôi bần tăng ra Đình Cờ đánh một ván vậy.');
+  broadcast(room, { t: 'feed', msg: `🧘 Đường Tăng thấy kèo ${RULES.CO.names[o.game].toLowerCase()} ${o.bet} phước của ${o.name}, đang ra Đình Cờ nhận kèo…` });
+  broadcast(room, { t: 'coState', co: coState(room) });
+}
+function tangSitDown(room) {
+  const t = room.tang, now = Date.now(), o = room.co.offers.get(t.offerId), opp = o && room.clients.get(o.id);
+  const busy = new Set([...room.co.games.values()].map(g => g.table)), table = LAYOUT.coTables[t.table];
+  const back = msg => { t.offerId = null; t.mode = 'back'; tangSay(room, msg); tangGo(t, ['X3', 'X2', 'X1', 'A']); broadcast(room, { t: 'coState', co: coState(room) }); };
+  if (!o || !opp || opp.coGid) return back('Ủa, kèo đâu mất rồi… thôi đi tìm Ngộ Không tiếp.');
+  if (busy.has(table.id)) return back('Bàn có người ngồi rồi, để lần sau vậy.');
+  const po = db.players[opp.pid];
+  if (po.phuoc < o.bet || !RULES.useStamina(po, RULES.CO.cost, now)) { room.co.offers.delete(o.id); return back('Thí chủ hết phước hay hết sức rồi, nghỉ ngơi đi nhé.'); }
+  po.phuoc -= o.bet; room.co.offers.delete(o.id);
+  const first = Math.random() < .5 ? opp : t, second = first === t ? opp : t;
+  const g = RULES.coNew(o.game, first.id, second.id, now);
+  Object.assign(g, { id: crypto.randomBytes(4).toString('hex'), bet: o.bet, table: table.id, tang: true, names: { [first.id]: first.name, [second.id]: second.name }, pids: { [opp.id]: opp.pid } });
+  room.co.games.set(g.id, g); bump('coGames'); t.mode = 'play'; t.offerId = null;
+  [first, second].forEach((c, i) => { const st = table.seats[i]; if (c === opp) c.coGid = g.id; c.pose = 'sit'; c.x = st.x; c.y = st.y; c.dirtyMove = true; broadcast(room, { t: 'pose', id: c.id, pose: 'sit', x: st.x, y: st.y, yaw: st.yaw }); });
+  broadcast(room, { t: 'feed', msg: `🧘 Đường Tăng nhận kèo ${RULES.CO.names[o.game].toLowerCase()} ${o.bet} phước của ${opp.name}!` });
+  tangSay(room, 'A Di Đà Phật, thí chủ mời.');
+  opp.ws.send({ t: 'profile', profile: profileOf(opp.pid) });
+  coSend(room, g); broadcast(room, { t: 'coState', co: coState(room) });
+}
+function tangThink(room, g) {
+  if (g.over || g.thinking || RULES.coTurnId(g) !== RULES.TANG.id) return;
+  g.thinking = true;
+  setTimeout(() => {
+    g.thinking = false; if (g.over) return;
+    const mv = RULES.coBot(g); if (!mv) return;
+    const r = RULES.coPlay(g, RULES.TANG.id, mv, Date.now()); if (r.err) return;
+    if (r.end) return endCo(room, g, r.end.winner, r.end.reason);
+    coSend(room, g);
+  }, 900 + Math.random() * 1600);
+}
+function tangAfterGame(room, g, winner) {
+  const t = room.tang, table = LAYOUT.coTables[g.table];
+  setTimeout(() => {
+    tangSay(room, winner === t.id ? 'A Di Đà Phật, thí chủ nhường bần tăng rồi.' : winner ? 'Thí chủ cao tay quá, bần tăng xin bái phục.' : 'Hoà là đẹp, đúng đạo trung dung.');
+    t.pose = ''; broadcast(room, { t: 'pose', id: t.id, pose: '' });
+    t.mode = 'back'; tangGo(t, ['X3', 'X2', 'X1', 'A'], []); t.path.unshift({ x: table.x, y: 2870 });
+  }, 1200);
+}
+setInterval(() => { for (const r of rooms.values()) tangStep(r, .1); }, 100);
+setInterval(() => {                                    // kèo quá hạn tự huỷ · Đường Tăng xét có nhận kèo không
+  const now = Date.now();
+  for (const r of rooms.values()) {
+    for (const [kind, offers] of [['tug', r.tug.offers], ['co', r.co.offers]]) for (const o of [...offers.values()]) {
+      if (now - o.t < RULES.OFFER_TTL || (kind === 'co' && r.tang.offerId === o.id)) continue;
+      offers.delete(o.id);
+      const c = r.clients.get(o.id); if (c) c.ws.send({ t: 'toast', msg: `⌛ Kèo ${kind === 'tug' ? 'kéo co' : RULES.CO.names[o.game].toLowerCase()} ${o.bet} phước đã tự huỷ vì ${RULES.OFFER_TTL / 1000} giây không ai nhận. Phước của bạn vẫn nguyên.` });
+      broadcast(r, kind === 'tug' ? { t: 'tugState', tug: tugState(r) } : { t: 'coState', co: coState(r) });
+    }
+    tangLookForGame(r);
+  }
+}, 2000);
 const coOut = (g, now) => ({ id: g.id, game: g.game, bet: g.bet, table: g.table, x: g.x, o: g.o, names: g.names, s: g.s, clock: g.clock, turnStart: g.turnStart, turn: RULES.coTurnId(g), drawBy: g.drawBy, serverTime: now, end: g.end || null });
-function coSend(room, g, only) { const msg = { t: 'coGame', g: coOut(g, Date.now()) }; for (const id of only ? [only.id] : [g.x, g.o]) { const c = room.clients.get(id); if (c) c.ws.send(msg); } }
+function coSend(room, g, only) { const msg = { t: 'coGame', g: coOut(g, Date.now()) }; for (const id of only ? [only.id] : [g.x, g.o]) { const c = room.clients.get(id); if (c) c.ws.send(msg); } if (g.tang) tangThink(room, g); }
 function endCo(room, g, winner, reason) {
   if (g.over) return; g.over = true; g.end = { winner, reason };
+  if (g.tang) tangAfterGame(room, g, winner);
   room.co.games.delete(g.id);
   if (winner) { const pw = db.players[g.pids[winner]]; if (pw) pw.phuoc += g.bet * 2; }
   else for (const id of [g.x, g.o]) { const pl = db.players[g.pids[id]]; if (pl) pl.phuoc += g.bet; }
@@ -1034,7 +1146,7 @@ setInterval(() => {                                    // hết giờ là thua
 /* ---------- Kéo co ---------- */
 function tugState(room) {
   const mt = room.tug.match;
-  return { offers: [...room.tug.offers.values()].map(o => ({ id: o.id, name: o.name, bet: o.bet })), match: mt ? { a: mt.a, b: mt.b, aName: mt.aName, bName: mt.bName, bet: mt.bet, pos: mt.pos, startAt: mt.startAt, endAt: mt.endAt } : null };
+  return { offers: [...room.tug.offers.values()].map(o => ({ id: o.id, name: o.name, bet: o.bet, exp: o.t + RULES.OFFER_TTL })), match: mt ? { a: mt.a, b: mt.b, aName: mt.aName, bName: mt.bName, bet: mt.bet, pos: mt.pos, startAt: mt.startAt, endAt: mt.endAt } : null };
 }
 function endTug(room, winnerId, forfeit) {
   const mt = room.tug.match; if (!mt) return;
@@ -1112,7 +1224,7 @@ function broadcastRoomInfo() {
 setInterval(() => {
   for (const r of rooms.values()) {
     const moved = [];
-    for (const c of r.clients.values()) if (c.dirtyMove) { c.dirtyMove = false; moved.push([c.id, Math.round(c.x), Math.round(c.y), c.dir, c.moving ? 1 : 0]); }
+    for (const c of [...r.clients.values(), r.tang]) if (c.dirtyMove) { c.dirtyMove = false; moved.push([c.id, Math.round(c.x), Math.round(c.y), c.dir, c.moving ? 1 : 0]); }
     if (moved.length) broadcast(r, { t: 's', p: moved });
   }
 }, 83);
