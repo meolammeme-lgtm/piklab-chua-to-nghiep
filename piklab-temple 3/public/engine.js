@@ -146,7 +146,7 @@ function createRenderer(canvas, opts = {}) {
   precision highp float; precision highp sampler2DShadow;
   in vec3 vW; in vec3 vN; in vec3 vC; in vec2 vU; in vec4 vL;
   uniform sampler2DShadow uSh; uniform sampler2D uTex; uniform int uUseTex; uniform int uPcf;
-  uniform vec3 uSun, uSunC, uSky, uGnd, uCam; uniform float uEm, uAlpha, uExp, uSat, uGlow;
+  uniform vec3 uSun, uSunC, uSky, uGnd, uCam; uniform float uEm, uAlpha, uExp, uSat, uGlow, uSnow, uWet;
   out vec4 o;
   float shadow(){ vec3 p=vL.xyz/vL.w*.5+.5; if(p.x<0.||p.x>1.||p.y<0.||p.y>1.||p.z>1.) return 1.;
     vec2 t=1./vec2(textureSize(uSh,0)); float s=0.;
@@ -156,6 +156,9 @@ function createRenderer(canvas, opts = {}) {
   void main(){
     vec3 n=normalize(vN); vec3 base=vC; float a=uAlpha;
     if(uUseTex==1){ vec4 t=texture(uTex,vU); if(t.a<.5) discard; base=pow(t.rgb, vec3(2.2)); }
+    float up = smoothstep(.5, .92, n.y);
+    base = mix(base, vec3(.88,.9,.95), uSnow * up);              // tuyết phủ mặt hướng lên trời
+    base *= 1. - uWet * .28 * up;                                // mặt đất ướt khi mưa
     float d=max(dot(n,uSun),0.); d = d*.85 + .15*smoothstep(-.2,.6,dot(n,uSun));
     float s=shadow();
     vec3 hemi=mix(uGnd,uSky,n.y*.5+.5);
@@ -171,7 +174,7 @@ function createRenderer(canvas, opts = {}) {
   const SFS = `#version 300 es
   precision mediump float; out vec4 o; void main(){ o=vec4(1.); }`;
   const main = prog(VS, FS), shp = prog(SVS, SFS);
-  const U = {}; ['uM', 'uVP', 'uLVP', 'uNM', 'uTint', 'uSh', 'uTex', 'uUseTex', 'uSun', 'uSunC', 'uSky', 'uGnd', 'uCam', 'uEm', 'uAlpha', 'uExp', 'uSat', 'uGlow', 'uPcf'].forEach(n => U[n] = gl.getUniformLocation(main, n));
+  const U = {}; ['uM', 'uVP', 'uLVP', 'uNM', 'uTint', 'uSh', 'uTex', 'uUseTex', 'uSun', 'uSunC', 'uSky', 'uGnd', 'uCam', 'uEm', 'uAlpha', 'uExp', 'uSat', 'uGlow', 'uPcf', 'uSnow', 'uWet'].forEach(n => U[n] = gl.getUniformLocation(main, n));
   const SU = { uM: gl.getUniformLocation(shp, 'uM'), uLVP: gl.getUniformLocation(shp, 'uLVP') };
 
   // shadow map
@@ -230,7 +233,7 @@ function createRenderer(canvas, opts = {}) {
     gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.useProgram(main);
     gl.uniformMatrix4fv(U.uVP, false, cam.vp); gl.uniformMatrix4fv(U.uLVP, false, LVP);
-    gl.uniform3fv(U.uSun, env.sun); gl.uniform3fv(U.uSunC, env.sunC); gl.uniform3fv(U.uSky, env.sky); gl.uniform3fv(U.uGnd, env.gnd); gl.uniform3fv(U.uCam, cam.eye); gl.uniform1f(U.uExp, env.exp); gl.uniform1f(U.uSat, env.sat); gl.uniform1f(U.uGlow, env.glow); gl.uniform1i(U.uPcf, pcf);
+    gl.uniform3fv(U.uSun, env.sun); gl.uniform3fv(U.uSunC, env.sunC); gl.uniform3fv(U.uSky, env.sky); gl.uniform3fv(U.uGnd, env.gnd); gl.uniform3fv(U.uCam, cam.eye); gl.uniform1f(U.uExp, env.exp); gl.uniform1f(U.uSat, env.sat); gl.uniform1f(U.uGlow, env.glow); gl.uniform1i(U.uPcf, pcf); gl.uniform1f(U.uSnow, env.snow || 0); gl.uniform1f(U.uWet, env.wet || 0);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, depth); gl.uniform1i(U.uSh, 0);
     gl.uniform1i(U.uTex, 1);
     const draw = it => {
