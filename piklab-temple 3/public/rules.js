@@ -3,7 +3,7 @@
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.RULES = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
-  const VERSION = '2.3.3';   // tăng mỗi đợt: server & trang game phải cùng phiên bản
+  const VERSION = '2.4';   // tăng mỗi đợt: server & trang game phải cùng phiên bản
   const STAMINA_MAX = 100;
   const REGEN_MS = 90e3;                 // tự hồi 1 sinh lực mỗi 90 giây (để không bao giờ bị kẹt)
 
@@ -196,6 +196,133 @@
     if (code === 2 || code === 3) return 'cloudy';
     return 'clear';
   }
+  // ---- Đình Cờ: cờ vua & cờ caro cược phước (luật dùng chung cho server, bản demo và giao diện) ----
+  const CO = { bets: [5, 10, 20, 50], cost: 3, clock: { chess: 600e3, caro: 300e3 }, tables: 4, names: { chess: 'Cờ vua', caro: 'Cờ caro' } };
+  // Cờ vua: ô = hàng * 8 + cột, hàng 0 là hàng 8 (phía Đen), hàng 7 là hàng 1 (phía Trắng). Quân: 'wK', 'bP'…
+  const CHESS = (() => {
+    const N = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]], K8 = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
+    const DIAG = [[-1, -1], [-1, 1], [1, -1], [1, 1]], ORTH = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    const on = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+    function init() {
+      const b = [];
+      for (const ch of 'rnbqkbnrpppppppp' + '-'.repeat(32) + 'PPPPPPPPRNBQKBNR') b.push(ch === '-' ? '' : (ch === ch.toUpperCase() ? 'w' : 'b') + ch.toUpperCase());
+      return { b, turn: 'w', castle: 'KQkq', ep: -1, half: 0, moves: 0, last: null };
+    }
+    function attacked(b, sq, by) {                     // ô sq có bị phe `by` khống chế không
+      const r = sq >> 3, c = sq & 7, pr = by === 'w' ? r + 1 : r - 1;
+      for (const dc of [-1, 1]) if (on(pr, c + dc) && b[pr * 8 + c + dc] === by + 'P') return true;
+      for (const [dr, dc] of N) if (on(r + dr, c + dc) && b[(r + dr) * 8 + c + dc] === by + 'N') return true;
+      for (const [dr, dc] of K8) if (on(r + dr, c + dc) && b[(r + dr) * 8 + c + dc] === by + 'K') return true;
+      for (const [dirs, pcs] of [[DIAG, 'BQ'], [ORTH, 'RQ']]) for (const [dr, dc] of dirs) {
+        let rr = r + dr, cc = c + dc;
+        while (on(rr, cc)) { const p = b[rr * 8 + cc]; if (p) { if (p[0] === by && pcs.includes(p[1])) return true; break; } rr += dr; cc += dc; }
+      }
+      return false;
+    }
+    function pseudo(s) {
+      const { b, turn } = s, opp = turn === 'w' ? 'b' : 'w', out = [];
+      for (let sq = 0; sq < 64; sq++) {
+        const p = b[sq]; if (!p || p[0] !== turn) continue;
+        const r = sq >> 3, c = sq & 7, t = p[1], add = (to, x) => out.push(Object.assign({ from: sq, to }, x));
+        if (t === 'P') {
+          const dir = turn === 'w' ? -1 : 1, start = turn === 'w' ? 6 : 1, last = turn === 'w' ? 0 : 7;
+          const push = (to, x) => { if ((to >> 3) === last) for (const pr of 'QRBN') add(to, Object.assign({ promo: pr }, x)); else add(to, x); };
+          const f = (r + dir) * 8 + c;
+          if (on(r + dir, c) && !b[f]) { push(f); const f2 = (r + 2 * dir) * 8 + c; if (r === start && !b[f2]) add(f2, { dbl: 1 }); }
+          for (const dc of [-1, 1]) { if (!on(r + dir, c + dc)) continue; const to = (r + dir) * 8 + c + dc; if (b[to] && b[to][0] === opp) push(to); else if (to === s.ep) add(to, { ep: 1 }); }
+        } else if (t === 'N' || t === 'K') {
+          for (const [dr, dc] of t === 'N' ? N : K8) { if (!on(r + dr, c + dc)) continue; const to = (r + dr) * 8 + c + dc; if (!b[to] || b[to][0] === opp) add(to); }
+          const rank = turn === 'w' ? 7 : 0, cr = turn === 'w' ? 'KQ' : 'kq', k = rank * 8;
+          if (t === 'K' && sq === k + 4 && !attacked(b, sq, opp)) {         // nhập thành: vua chưa đi, không bị chiếu, không đi qua ô bị khống chế
+            if (s.castle.includes(cr[0]) && !b[k + 5] && !b[k + 6] && b[k + 7] === turn + 'R' && !attacked(b, k + 5, opp) && !attacked(b, k + 6, opp)) add(k + 6, { castle: 'K' });
+            if (s.castle.includes(cr[1]) && !b[k + 3] && !b[k + 2] && !b[k + 1] && b[k] === turn + 'R' && !attacked(b, k + 3, opp) && !attacked(b, k + 2, opp)) add(k + 2, { castle: 'Q' });
+          }
+        } else {
+          for (const [dr, dc] of t === 'B' ? DIAG : t === 'R' ? ORTH : DIAG.concat(ORTH)) {
+            let rr = r + dr, cc = c + dc;
+            while (on(rr, cc)) { const to = rr * 8 + cc; if (b[to]) { if (b[to][0] === opp) add(to); break; } add(to); rr += dr; cc += dc; }
+          }
+        }
+      }
+      return out;
+    }
+    function apply(s, m) {
+      const b = s.b.slice(), p = b[m.from], turn = s.turn, opp = turn === 'w' ? 'b' : 'w', cap = b[m.to] || (m.ep ? opp + 'P' : '');
+      let castle = s.castle;
+      b[m.to] = m.promo ? turn + m.promo : p; b[m.from] = '';
+      if (m.ep) b[m.to + (turn === 'w' ? 8 : -8)] = '';
+      if (m.castle) { const k = (turn === 'w' ? 7 : 0) * 8; if (m.castle === 'K') { b[k + 5] = b[k + 7]; b[k + 7] = ''; } else { b[k + 3] = b[k]; b[k] = ''; } }
+      if (p[1] === 'K') castle = castle.replace(turn === 'w' ? /[KQ]/g : /[kq]/g, '');
+      const rookSq = { 56: 'Q', 63: 'K', 0: 'q', 7: 'k' };
+      for (const sq of [m.from, m.to]) if (rookSq[sq]) castle = castle.replace(rookSq[sq], '');
+      return { b, turn: opp, castle, ep: m.dbl ? (m.from + m.to) / 2 : -1, half: p[1] === 'P' || cap ? 0 : s.half + 1, moves: s.moves + 1, last: { from: m.from, to: m.to }, cap };
+    }
+    const kingSq = (b, color) => b.indexOf(color + 'K');
+    const legal = s => pseudo(s).filter(m => { const n = apply(s, m); return !attacked(n.b, kingSq(n.b, s.turn), n.turn); });
+    const inCheck = s => attacked(s.b, kingSq(s.b, s.turn), s.turn === 'w' ? 'b' : 'w');
+    function status(s) {                                // 'mate' | 'stalemate' | 'material' | 'fifty' | 'check' | ''
+      const chk = inCheck(s);
+      if (!legal(s).length) return chk ? 'mate' : 'stalemate';
+      const pcs = s.b.filter(Boolean).map(p => p[1]).sort().join('');
+      if (pcs === 'KK' || pcs === 'BKK' || pcs === 'KKN') return 'material';
+      if (s.half >= 100) return 'fifty';
+      return chk ? 'check' : '';
+    }
+    const find = (s, from, to, promo) => legal(s).find(m => m.from === from && m.to === to && (!m.promo || m.promo === (promo || 'Q')));
+    return { init, legal, apply, status, find, inCheck, attacked };
+  })();
+  // Cờ caro kiểu Việt Nam: bàn 20×20, X đi trước, 5 quân liền trở lên thắng — nhưng bị chặn cả hai đầu thì không tính
+  const CARO = {
+    size: 20,
+    init: () => ({ b: Array(400).fill(0), turn: 1, moves: 0, last: -1, line: null }),
+    win(b, idx, p, size = 20) {
+      const x = idx % size, y = (idx / size) | 0;
+      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) {
+        const line = [idx]; let blocked = 0;
+        for (const sg of [1, -1]) for (let k = 1; ; k++) {
+          const xx = x + dx * k * sg, yy = y + dy * k * sg;
+          if (xx < 0 || yy < 0 || xx >= size || yy >= size) break;     // mép bàn không tính là bị chặn
+          const v = b[yy * size + xx];
+          if (v === p) { line.push(yy * size + xx); continue; }
+          if (v) blocked++;
+          break;
+        }
+        if (line.length >= 5 && blocked < 2) return line;
+      }
+      return null;
+    }
+  };
+  // Một ván: x = người đi trước (Trắng / X), o = người đi sau. Đồng hồ tính bằng ms còn lại tại lúc bắt đầu lượt hiện tại.
+  function coNew(game, xId, oId, now) {
+    return { game, x: xId, o: oId, s: game === 'chess' ? CHESS.init() : CARO.init(), clock: { [xId]: CO.clock[game], [oId]: CO.clock[game] }, turnStart: now, drawBy: null, over: false };
+  }
+  const coTurnId = g => g.game === 'chess' ? (g.s.turn === 'w' ? g.x : g.o) : (g.s.turn === 1 ? g.x : g.o);
+  const coOther = (g, id) => id === g.x ? g.o : g.x;
+  function coPlay(g, by, mv, now) {                    // → { err } | { ok, end?: { winner, reason } }
+    if (g.over) return { err: 'over' };
+    if (coTurnId(g) !== by) return { err: 'turn' };
+    if (!mv || typeof mv !== 'object') return { err: 'bad' };
+    const left = g.clock[by] - (now - g.turnStart);
+    if (left <= 0) { g.clock[by] = 0; return { ok: true, end: { winner: coOther(g, by), reason: 'time' } }; }
+    let end = null;
+    if (g.game === 'chess') {
+      const m = CHESS.find(g.s, mv.from | 0, mv.to | 0, 'QRBN'.includes(mv.promo) ? mv.promo : 'Q'); if (!m) return { err: 'illegal' };
+      g.s = CHESS.apply(g.s, m);
+      const st = CHESS.status(g.s);
+      if (st === 'mate') end = { winner: by, reason: 'mate' };
+      else if (st === 'stalemate' || st === 'material' || st === 'fifty') end = { winner: null, reason: st };
+    } else {
+      const i = mv.i | 0, n = CARO.size * CARO.size;
+      if (i < 0 || i >= n || g.s.b[i]) return { err: 'illegal' };
+      const p = g.s.turn, b = g.s.b.slice(); b[i] = p;
+      const line = CARO.win(b, i, p);
+      g.s = { b, turn: 3 - p, moves: g.s.moves + 1, last: i, line };
+      if (line) end = { winner: by, reason: 'five' }; else if (g.s.moves >= n) end = { winner: null, reason: 'full' };
+    }
+    g.clock[by] = left; g.turnStart = now; g.drawBy = null;
+    return { ok: true, end };
+  }
+  const coTimeout = (g, now) => { const id = coTurnId(g); return g.clock[id] - (now - g.turnStart) <= 0 ? id : null; };
   const TUG = { win: 18, ms: 12000, countdown: 3000, minGap: 70, grace: 300 };   // minGap: tối đa ~14 lần/giây, grace: bù độ trễ mạng   // kéo lệch 18 lần là thắng, tối đa 12 giây
 
   const DEFAULT_FORTUNES = [
@@ -236,5 +363,5 @@
     for (const w of banned || []) if (w) t = t.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => '*'.repeat(m.length));
     return t;
   }
-  return { OUTFITS, COBA_SAYS, POOP, RARITY, CAU, DEFAULT_BRIEFS, rollBrief, VERSION, FISH, FISH_RULES, SAMHOI, PEN_LESSONS, PEN, penScore, penSegs, sampleSegs, BELL, bellPos, CHANT, CITIES, WEATHER, weatherKind, STAMINA_MAX, REGEN_MS, COST, COLORS, HATS, HAIRS, FOODS, TUG_BETS, TUG, DEFAULT_FORTUNES, DEFAULT_BANNED, stamina, useStamina, filterText };
+  return { CO, CHESS, CARO, coNew, coTurnId, coOther, coPlay, coTimeout, OUTFITS, COBA_SAYS, POOP, RARITY, CAU, DEFAULT_BRIEFS, rollBrief, VERSION, FISH, FISH_RULES, SAMHOI, PEN_LESSONS, PEN, penScore, penSegs, sampleSegs, BELL, bellPos, CHANT, CITIES, WEATHER, weatherKind, STAMINA_MAX, REGEN_MS, COST, COLORS, HATS, HAIRS, FOODS, TUG_BETS, TUG, DEFAULT_FORTUNES, DEFAULT_BANNED, stamina, useStamina, filterText };
 });
