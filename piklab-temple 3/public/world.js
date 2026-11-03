@@ -824,6 +824,11 @@ function avatarMeshes(R, color, hat, hair, outfit) {
       g.add(P.lathe([[.31, -.03], [.318, .0], [.318, .07], [.31, .1], [.28, .1]], 22), '#a98a4c', T(0, .09, -.01));
       g.add(sp(.075, 10), '#f6ecd9', T(0, .47, -.01));
     }
+    else if (hat === 'tylu') {                            // mũ Tỳ Lư của Đường Tăng: vành vàng ôm đầu, 5 cánh sen dựng quanh trán, đính ngọc
+      g.add(cy(.29, .3, .07, 24), '#d4a73a', T(0, .1, -.01)); g.add(cy(.302, .302, .015, 24), '#a8382c', T(0, .135, -.01));
+      for (let i = 0; i < 5; i++) { const a = (i - 2) * .52; g.add(P.lathe([[0, 0], [.07, .02], [.065, .12], [0, .2]], 8), '#e6c25a', T(Math.sin(a) * .27, .14, -.01 + Math.cos(a) * .27, a, 1, 1, .3, -.18)); g.add(sp(.025, 8), i === 2 ? '#c0392b' : '#2f6fb3', T(Math.sin(a) * .29, .23, -.01 + Math.cos(a) * .29)); }
+      for (const s of [-1, 1]) g.add(rb(.03, .32, .01, .005), '#d4a73a', T(s * .25, -.08, -.18, 0, 1, 1, 1, .15, s * .1));   // hai dải mũ buông sau
+    }
     else if (hat === 'headphone') { for (let i = 0; i <= 10; i++) { const a = Math.PI * i / 10; g.add(sp(.035, 6), '#262626', T(Math.cos(a) * .31, Math.sin(a) * .31 + .02, 0)); } for (const s of [-1, 1]) g.add(cy(.1, .1, .08, 14), '#c9a862', T(s * .3, .0, 0, 0, 1, 1, 1, 0, s * 1.57)); }
   });
   return (avCache[key] = { body, sitBody, head, armsSide, armsPray });
