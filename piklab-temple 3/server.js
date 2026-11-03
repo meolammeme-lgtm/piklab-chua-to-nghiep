@@ -92,6 +92,13 @@ function freshDb() {
       bellReward: 3,             // thỉnh trúng nhịp: + phước
       bellPenalty: 1,            // lệch nhịp (xì hơi): − phước
       chantReward: 2,            // gõ mõ / lần tràng hạt xong 1 lượt
+      fishPerDay: RULES.FISH_RULES.perDay,   // lượt phóng sinh mỗi ngày
+      poopRate: RULES.POOP.rate,             // % đào phải cức (khi không trúng voucher)
+      cauPerDay: RULES.CAU.perDay,           // lượt quăng câu brief mỗi ngày
+      briefs: RULES.DEFAULT_BRIEFS,          // danh sách brief admin chỉnh được
+      penPerDay: RULES.PEN.perDay,           // lượt nộp bài Thầy Đồ mỗi ngày
+      penReward: RULES.PEN.reward,           // phước khi bài đạt
+      samhoiPrice: RULES.SAMHOI.price,       // phước để ghim lời sám hối
       weatherMode: 'auto',       // auto = theo dự báo thật, manual = admin chọn
       weatherCity: 'hanoi',
       weatherManual: 'clear',
@@ -105,6 +112,7 @@ function freshDb() {
     accounts: {},
     sessions: {},
     adminSessions: {},
+    samhoi: {},                  // bảng sám hối: { id: { text, t, by(pid), n, who: [pid] } }
     totals: { visits: 0, incense: 0, digs: 0, wins: 0, feeds: 0, bells: 0, roomsCreated: 1, registers: 0, fortunes: 0, shouts: 0, tugs: 0, sweeps: 0, meals: 0, purchases: 0 }
   };
 }
@@ -126,7 +134,7 @@ const REDIS_URL = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/\/+$/, '')
 const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || '';
 const USE_REDIS = !!(REDIS_URL && REDIS_TOKEN);
 const RK = 'piklab:';
-const HASH_COLLS = ['accounts', 'players', 'sessions', 'adminSessions', 'daily', 'hourly'];   // object { key: value }
+const HASH_COLLS = ['accounts', 'players', 'sessions', 'adminSessions', 'daily', 'hourly', 'samhoi'];   // object { key: value }
 const STR_COLLS = ['config', 'vouchers', 'totals'];
 const savedCache = {};                                                     // bản đã lưu gần nhất (JSON)
 async function redis(cmds) {
@@ -233,8 +241,10 @@ function profileOf(pid) {
     st: RULES.stamina(p, Date.now()), stMax: RULES.STAMINA_MAX,
     today: (d => ({ bellLeft: Math.max(0, db.config.bellPerDay - d.bell), fortuneLeft: d.acc ? 0 : Math.max(0, db.config.fortunePerDay - d.fq.length),
       drawn: d.fq.map(i => ({ no: i + 1, text: (db.config.fortunes || [])[i] || '' })), accepted: d.acc,
-      moLeft: Math.max(0, RULES.CHANT.mo.perDay - d.mo), beadsLeft: Math.max(0, RULES.CHANT.beads.perDay - d.beads) }))(dd(p)),
-    look: { color: acc.color, hat: acc.hat, hair: acc.hair }, items: acc.items || { hats: [], colors: [] },
+      moLeft: Math.max(0, RULES.CHANT.mo.perDay - d.mo), beadsLeft: Math.max(0, RULES.CHANT.beads.perDay - d.beads),
+      fishLeft: Math.max(0, db.config.fishPerDay - (d.fish || 0)), penLeft: Math.max(0, db.config.penPerDay - (d.pen || 0)), samhoiLeft: Math.max(0, RULES.SAMHOI.perDay - (d.sh || 0)), cauLeft: Math.max(0, db.config.cauPerDay - (d.cau || 0)) }))(dd(p)),
+    penLesson: p.penLesson || 0, briefs: p.briefs || {}, fishBag: p.fishBag || {},
+    look: { color: acc.color, hat: acc.hat, hair: acc.hair, outfit: acc.outfit }, items: acc.items || { hats: [], colors: [], outfits: [] },
     wins: p.wins.map(id => db.awards.find(a => a.id === id)).filter(Boolean)
       .map(a => ({ title: a.title, code: a.code, link: a.link, time: a.time, description: a.description }))
   };
@@ -251,10 +261,12 @@ function ensureAcc(a) {
   if (!a) return a;
   if (!a.hair) { a.hair = a.hat === 'bald' ? 'bald' : 'bun'; if (a.hat === 'bald') a.hat = 'none'; }
   if (!RULES.HATS.some(h => h.id === a.hat)) a.hat = 'none';
+  if (!RULES.OUTFITS.some(o => o.id === a.outfit)) a.outfit = 'trang';
   if (!a.items) a.items = { hats: [], colors: [] };
-  const basicH = RULES.HATS.filter(h => !h.price).map(h => h.id), basicC = RULES.COLORS.filter(c => !c.price).map(c => c.id);
+  const basicH = RULES.HATS.filter(h => !h.price).map(h => h.id), basicC = RULES.COLORS.filter(c => !c.price).map(c => c.id), basicO = RULES.OUTFITS.filter(o => !o.price).map(o => o.id);
   a.items.hats = [...new Set([...basicH, ...a.items.hats, a.hat])];
   a.items.colors = [...new Set([...basicC, ...a.items.colors, a.color])];
+  a.items.outfits = [...new Set([...basicO, ...(a.items.outfits || []), a.outfit])];
   return a;
 }
 
@@ -266,7 +278,7 @@ function makeRoom(num) {
     clients: new Map(),
     plots: LAYOUT.plots.map(p => ({ id: p.id, state: 'ripe', regrowAt: 0 })),
     leaves: LAYOUT.leaves.map(l => ({ id: l.id, state: 'full', regrowAt: 0 })),
-    tug: { offers: new Map(), match: null },
+    tug: { offers: new Map(), match: null }, seats: Array(RULES.CAU.seats).fill(null),
     incense: [], createdAt: Date.now(), emptySince: 0
   };
   rooms.set(room.id, room);
@@ -424,7 +436,7 @@ function accountByToken(token) {
   return ensureAcc(db.accounts[s.email]) || null;
 }
 const accountByPid = pid => Object.values(db.accounts).find(a => a.pid === pid);
-const pubAccount = a => (ensureAcc(a), { name: a.name, color: a.color, hat: a.hat, hair: a.hair });
+const pubAccount = a => (ensureAcc(a), { name: a.name, color: a.color, hat: a.hat, hair: a.hair, outfit: a.outfit });
 function kickPid(pid, msg, banned) {
   for (const r of rooms.values()) for (const c of r.clients.values()) if (c.pid === pid) { c.ws.send({ t: 'kicked', msg, banned: !!banned }); setTimeout(() => c.ws.close(), 50); }
 }
@@ -480,7 +492,9 @@ function handleClient(ws, req) {
   // giới hạn tốc độ gửi tin: tối đa ~40 tin/giây, vượt quá 120 tin trong 1 giây thì ngắt
   let mWin = Date.now(), mCount = 0;
 
-  ws.onmessage = text => {
+  // lỗi trong một tin nhắn chỉ ảnh hưởng tin đó, không làm sập cả server
+  ws.onmessage = text => { try { onMsg(text); } catch (e) { console.error('[lỗi] xử lý tin nhắn từ', ip, e); } };
+  const onMsg = text => {
     const nowM = Date.now();
     if (nowM - mWin > 1000) { mWin = nowM; mCount = 0; }
     if (++mCount > 120) { console.warn('[bảo mật] ngắt kết nối gửi tin quá nhanh từ', ip); return ws.close(); }
@@ -506,7 +520,7 @@ function handleClient(ws, req) {
         room = pickRoom();
         me = {
           ws, pid, ip, name, id: crypto.randomBytes(4).toString('hex'),
-          color: acc.color, hat: acc.hat, hair: acc.hair, lastSay: 0,
+          color: acc.color, hat: acc.hat, hair: acc.hair, outfit: acc.outfit, lastSay: 0,
           x: LAYOUT.spawn.x + (Math.random() * 80 - 40), y: LAYOUT.spawn.y + (Math.random() * 30 - 15),
           dir: 1, moving: false, lastIncense: 0, lastBell: 0, lastEmote: 0, pose: '', bell: null, chant: null
         };
@@ -518,8 +532,8 @@ function handleClient(ws, req) {
           templeName: db.config.templeName, shopUrl: db.config.shopUrl,
           profile: profileOf(pid), pid, rooms: roomList(), serverTime: Date.now(), regrowSec: db.config.plotRegrowSec,
           leaves: room.leaves, leafRegrowSec: db.config.leafRegrowSec, tug: tugState(room),
-          prices: { fortune: db.config.fortuneCost, shout: db.config.shoutCost, sweep: db.config.sweepReward, bellReward: db.config.bellReward, bellPenalty: db.config.bellPenalty, chant: db.config.chantReward },
-          weather: weatherOut()
+          prices: { fortune: db.config.fortuneCost, shout: db.config.shoutCost, sweep: db.config.sweepReward, bellReward: db.config.bellReward, bellPenalty: db.config.bellPenalty, chant: db.config.chantReward, penReward: db.config.penReward, samhoi: db.config.samhoiPrice, fishPerDay: db.config.fishPerDay },
+          weather: weatherOut(), ver: RULES.VERSION, briefs: briefsPub()
         });
         broadcast(room, { t: 'join', p: pub(me) }, me);
         broadcastRoomInfo();
@@ -531,7 +545,7 @@ function handleClient(ws, req) {
         me.x = Math.max(0, Math.min(LAYOUT.W, x)); me.y = Math.max(0, Math.min(LAYOUT.H, y));
         me.dir = m.dir === -1 ? -1 : 1; me.moving = !!m.moving;
         me.dirtyMove = true;
-        if (me.moving && me.pose) { me.pose = ''; me.chant = null; broadcast(room, { t: 'pose', id: me.id, pose: '' }); }
+        if (me.moving && me.pose) { me.pose = ''; me.chant = null; me.cast = null; freeSeat(); broadcast(room, { t: 'pose', id: me.id, pose: '' }); }
         break;
       }
       case 'emote': {
@@ -564,8 +578,9 @@ function handleClient(ws, req) {
       case 'bell': return;                 // bản cũ: thay bằng minigame thỉnh chuông
       case 'bellStart': {
         const now = Date.now(), p = db.players[me.pid], d = dd(p);
-        if (dist(me, LAYOUT.bell) > LAYOUT.bell.radius + 60) return;
-        if (now - me.lastBell < 2500) return;
+        // luôn trả lời để máy khách không bị treo ở màn hình chờ
+        if (dist(me, LAYOUT.bell) > LAYOUT.bell.radius + 90) return ws.send({ t: 'bellWait', msg: 'Lại gần chuông hơn chút nữa rồi thỉnh nhé 🔔' });
+        if (now - me.lastBell < 1500) return ws.send({ t: 'bellWait', msg: 'Chuông còn đang ngân… đợi một nhịp rồi thỉnh tiếp' });
         if (d.bell >= db.config.bellPerDay) return ws.send({ t: 'bellNo', msg: `Hôm nay bạn đã thỉnh đủ ${db.config.bellPerDay} hồi chuông rồi. Mai quay lại nhé 🔔` });
         if (!RULES.useStamina(p, RULES.COST.bell, now)) return tired();
         d.bell++; me.lastBell = now;
@@ -595,6 +610,12 @@ function handleClient(ws, req) {
         }
         saveSoon();
         break;
+      }
+      case 'bellCancel': {                 // đóng bảng khi kim chưa chạy → hoàn lại lượt và sinh lực
+        const b = me.bell; if (!b || Date.now() > b.t0 + 200) return; me.bell = null; me.lastBell = 0;
+        const p = db.players[me.pid], d = dd(p); d.bell = Math.max(0, d.bell - 1);
+        p.st = Math.min(RULES.STAMINA_MAX, RULES.stamina(p, Date.now()) + RULES.COST.bell);
+        saveSoon(); return ws.send({ t: 'profile', profile: profileOf(me.pid) });
       }
       case 'chantStart': {
         const kind = m.kind === 'beads' ? 'beads' : 'mo';
@@ -644,6 +665,11 @@ function handleClient(ws, req) {
           const award = giveVoucher(v, me.pid, me.name, room.name);
           ws.send({ t: 'digResult', ok: true, win: true, award: { title: award.title, code: award.code, link: award.link, description: award.description }, profile: profileOf(me.pid) });
           broadcast(room, { t: 'feed', msg: `🎉 ${me.name} vừa đào trúng ${award.title}!` });
+        } else if (Math.random() * 100 < (db.config.poopRate || 0)) {
+          // đào phải cức: không có rau, ruồi bay quanh đầu tới khi rửa tay ở giếng
+          me.stink = Date.now() + RULES.POOP.stinkMs; bump('poops');
+          broadcast(room, { t: 'stink', id: me.id, ms: RULES.POOP.stinkMs, plot: m.plot | 0 });
+          ws.send({ t: 'digResult', ok: true, win: false, poop: true, profile: profileOf(me.pid) });
         } else {
           p.rau++;
           ws.send({ t: 'digResult', ok: true, win: false, profile: profileOf(me.pid) });
@@ -652,7 +678,9 @@ function handleClient(ws, req) {
         break;
       }
       case 'sweep': case 'fortune': case 'say': case 'buy': case 'equip': case 'haircut': case 'eat':
-      case 'tugOffer': case 'tugCancel': case 'tugAccept': case 'tug': case 'fortuneAccept': return extra(m);
+      case 'tugOffer': case 'tugCancel': case 'tugAccept': case 'tug': case 'fortuneAccept':
+      case 'samhoiList': case 'samhoiPost': case 'samhoiPray': case 'penSubmit': case 'fishRelease': case 'fishBuy':
+      case 'wash': case 'cauSit': case 'cauLeave': case 'cauCast': case 'cauReel': return extra(m);
       case 'feed': {
         const a = LAYOUT.animals.find(x => x.id === m.animal);
         if (!a) return;
@@ -670,7 +698,8 @@ function handleClient(ws, req) {
     }
   };
   function tired() { ws.send({ t: 'tired', profile: profileOf(me.pid) }); }
-  function look() { const acc = accOf(me.pid); me.color = acc.color; me.hat = acc.hat; me.hair = acc.hair; broadcast(room, { t: 'look', id: me.id, color: me.color, hat: me.hat, hair: me.hair }); saveSoon(); }
+  function freeSeat() { if (me && room && me.seat !== undefined && me.seat !== null) { if (room.seats[me.seat] === me.id) room.seats[me.seat] = null; me.seat = null; } }
+  function look() { const acc = accOf(me.pid); me.color = acc.color; me.hat = acc.hat; me.hair = acc.hair; me.outfit = acc.outfit; broadcast(room, { t: 'look', id: me.id, color: me.color, hat: me.hat, hair: me.hair, outfit: me.outfit }); saveSoon(); }
   const near = (pt, r) => Math.hypot(me.x - pt.x, me.y - pt.y) < r;
   const M = LAYOUT.market;
   const inTug = () => Math.abs(me.x - M.tug.x) < M.tug.w / 2 + 80 && Math.abs(me.y - M.tug.y) < M.tug.h / 2 + 80;
@@ -710,7 +739,6 @@ function handleClient(ws, req) {
         return ws.send({ t: 'profile', profile: profileOf(me.pid), msg: `Đã đón nhận quẻ số ${i + 1} · áp dụng cả ngày hôm nay 🏮` });
       }
       case 'say': {
-        if (!near(M.shout, M.shout.r + 60)) return ws.send({ t: 'toast', msg: 'Chỉ được khẩu nghiệp trong Bãi Khẩu Nghiệp thôi nhé 🤫' });
         if (now - me.lastSay < 2500) return ws.send({ t: 'toast', msg: 'Từ từ thôi, để còn lấy hơi 😮‍💨' });
         const text = RULES.filterText(m.text, db.config.bannedWords); if (!text) return;
         if (p.phuoc < db.config.shoutCost) return ws.send({ t: 'toast', msg: 'Hết phước để khẩu nghiệp rồi 😅' });
@@ -719,10 +747,116 @@ function handleClient(ws, req) {
         broadcast(room, { t: 'say', id: me.id, text });
         return ws.send({ t: 'profile', profile: profileOf(me.pid) });
       }
+      /* ---- Bảng sám hối: ẩn danh, tự gỡ sau 48 giờ ---- */
+      case 'samhoiList': return ws.send({ t: 'samhoi', list: samhoiOut(me.pid, m.sort), mine: samhoiMine(me.pid) });
+      case 'samhoiPost': {
+        if (!near(LAYOUT.samhoi, 300)) return;
+        const d = dd(p), SH = RULES.SAMHOI, price = db.config.samhoiPrice;
+        const text = RULES.filterText(m.text, db.config.bannedWords, SH.max); if (!text || text.length < 4) return ws.send({ t: 'toast', msg: 'Lời sám hối ngắn quá, viết thêm chút nữa nhé 🙏' });
+        if ((d.sh || 0) >= SH.perDay) return ws.send({ t: 'toast', msg: `Mỗi ngày chỉ ghim được ${SH.perDay} lời sám hối thôi.` });
+        if (now - (p.lastSh || 0) < SH.gapMs) return ws.send({ t: 'toast', msg: 'Vừa sám hối xong, để lòng lắng lại vài phút nhé.' });
+        if (p.phuoc < price) return ws.send({ t: 'toast', msg: `Ghim lời sám hối cần ${price} phước.` });
+        p.phuoc -= price; d.sh = (d.sh || 0) + 1; p.lastSh = now; bump('samhois');
+        const id = crypto.randomBytes(5).toString('hex');
+        db.samhoi[id] = { text, t: now, by: me.pid, n: 0, who: [] };
+        const keys = Object.keys(db.samhoi); if (keys.length > SH.keep) keys.sort((a, b) => db.samhoi[a].t - db.samhoi[b].t).slice(0, keys.length - SH.keep).forEach(k => delete db.samhoi[k]);
+        saveSoon();
+        for (const r of rooms.values()) broadcast(r, { t: 'samhoiNew' });
+        ws.send({ t: 'samhoi', list: samhoiOut(me.pid, m.sort), mine: samhoiMine(me.pid) });
+        return ws.send({ t: 'profile', profile: profileOf(me.pid), msg: `Đã ghim lời sám hối · −${price} phước. Lòng nhẹ tênh 🙏` });
+      }
+      case 'samhoiPray': {
+        const it = Object.hasOwn(db.samhoi, String(m.id)) ? db.samhoi[m.id] : null; if (!it || now - it.t > RULES.SAMHOI.ttl) return;
+        if (it.by === me.pid) return ws.send({ t: 'toast', msg: 'Không tự đồng cảm với lời của mình được đâu 😄' });
+        if (it.who.includes(me.pid)) return;
+        it.who.push(me.pid); it.n++; bump('prays');
+        const d = dd(p); let msg = '';
+        if ((d.pray || 0) < RULES.SAMHOI.prayRewardPerDay) { d.pray = (d.pray || 0) + 1; p.phuoc += RULES.SAMHOI.prayReward; msg = `Đồng cảm 🙏 · +${RULES.SAMHOI.prayReward} phước`; }
+        saveSoon();
+        ws.send({ t: 'samhoi', list: samhoiOut(me.pid, m.sort), mine: samhoiMine(me.pid) });
+        return ws.send({ t: 'profile', profile: profileOf(me.pid), msg });
+      }
+      /* ---- Lớp Thầy Đồ Bezier: chấm bài Pen Tool trên server ---- */
+      case 'penSubmit': {
+        if (!near(M.thayDo, 420)) return;
+        const d = dd(p), cur = p.penLesson || 0, li = m.lesson | 0;
+        if (li < 0 || li > cur || li >= RULES.PEN_LESSONS.length) return;
+        if ((d.pen || 0) >= db.config.penPerDay) return ws.send({ t: 'penResult', limit: true, profile: profileOf(me.pid) });
+        const score = RULES.penScore(li, m.anchors, !!m.closed), pass = score >= RULES.PEN.pass;
+        d.pen = (d.pen || 0) + 1; bump('pens');
+        let gain = 0;
+        if (pass) { gain = db.config.penReward; p.phuoc += gain; bump('penPass'); if (li === cur && cur < RULES.PEN_LESSONS.length - 1) p.penLesson = cur + 1; }
+        saveSoon();
+        return ws.send({ t: 'penResult', score, pass, gain, lesson: li, profile: profileOf(me.pid) });
+      }
+      /* ---- Rửa tay ở giếng (hết ruồi) ---- */
+      case 'wash': {
+        if (!near(LAYOUT.well, 160)) return;
+        if (!me.stink || me.stink < now) return ws.send({ t: 'toast', msg: 'Tay sạch rồi mà 😄' });
+        me.stink = 0; broadcast(room, { t: 'stink', id: me.id, ms: 0 });
+        return ws.send({ t: 'toast', msg: 'Rửa tay xà phòng sạch bong, ruồi bay hết rồi 🧼' });
+      }
+      /* ---- Bãi câu brief ---- */
+      case 'cauSit': {
+        const st = LAYOUT.cauSeats[m.seat | 0]; if (!st || !near(st, 110)) return;
+        const who = room.seats[st.id]; if (who && who !== me.id && room.clients.has(who)) return ws.send({ t: 'toast', msg: 'Ghế này có người ngồi rồi, chọn ghế khác nhé 🎣' });
+        freeSeat(); room.seats[st.id] = me.id; me.seat = st.id; me.pose = 'fish'; me.x = st.x; me.y = st.y; me.dirtyMove = true;
+        return broadcast(room, { t: 'pose', id: me.id, pose: 'fish', x: st.x, y: st.y, seat: st.id });
+      }
+      case 'cauLeave': { me.cast = null; freeSeat(); if (me.pose) { me.pose = ''; broadcast(room, { t: 'pose', id: me.id, pose: '' }); } return; }
+      case 'cauCast': {
+        if (me.pose !== 'fish' || me.seat === undefined || me.seat === null) return ws.send({ t: 'toast', msg: 'Ngồi vào ghế câu trước đã 🎣' });
+        if (me.cast && now < me.cast.biteAt + 20000) return;
+        const d = dd(p);
+        if ((d.cau || 0) >= db.config.cauPerDay) return ws.send({ t: 'cauNo', msg: `Hôm nay bạn đã quăng câu ${db.config.cauPerDay} lần rồi. Mai câu tiếp nhé!` });
+        if (!RULES.useStamina(p, RULES.CAU.cost, now)) return tired();
+        const b = RULES.rollBrief(db.config.briefs); if (!b) return ws.send({ t: 'cauNo', msg: 'Hồ đang hết brief, nhờ admin thả thêm nhé.' });
+        d.cau = (d.cau || 0) + 1; bump('casts');
+        const delay = RULES.CAU.biteMin + Math.random() * (RULES.CAU.biteMax - RULES.CAU.biteMin);
+        me.cast = { id: b.id, rarity: b.rarity, biteAt: now + delay };
+        saveSoon();
+        return ws.send({ t: 'cauBite', delay: Math.round(delay), rarity: b.rarity, profile: profileOf(me.pid) });
+      }
+      case 'cauReel': {
+        const c = me.cast; if (!c) return; me.cast = null;
+        const since = now - c.biteAt, hook = +m.hook;
+        // chống gian lận: không thể giật trước khi cá cắn; độ trễ mạng cho phép như nhau với mọi người
+        const valid = isFinite(hook) && hook >= 0 && hook <= RULES.CAU.hookMs && since >= hook - 250 && since < 40000;
+        const b = (db.config.briefs || []).find(x => x.id === c.id), R = RULES.RARITY.find(r => r.id === c.rarity) || RULES.RARITY[0];
+        if (!valid || !m.ok || !b) return ws.send({ t: 'cauResult', ok: false, reason: !valid ? (hook > RULES.CAU.hookMs ? 'late' : 'early') : 'escape', rarity: c.rarity, profile: profileOf(me.pid) });
+        p.briefs = p.briefs || {}; const first = !p.briefs[b.id]; p.briefs[b.id] = (p.briefs[b.id] || 0) + 1;
+        p.phuoc += R.reward; bump('catches');
+        if (R.id === 'hiem' || R.id === 'sieu') for (const r of rooms.values()) broadcast(r, { t: 'feed', msg: `🎣 ${me.name} vừa câu được brief ${R.name.toUpperCase()}: “${b.name}”!` });
+        broadcast(room, { t: 'emote', id: me.id, e: 'heart' });
+        saveSoon();
+        return ws.send({ t: 'cauResult', ok: true, brief: { id: b.id, name: b.name, desc: b.desc, icon: b.icon, rarity: b.rarity }, first, count: p.briefs[b.id], gain: R.reward, profile: profileOf(me.pid) });
+      }
+      /* ---- Phóng sinh: mua cá của Cô Ba bằng sinh lực, ra mép bến thả mới được phước ---- */
+      case 'fishBuy': {
+        if (!near({ x: M.fishSeller.x, y: M.fishSeller.y + 70 }, 240)) return ws.send({ t: 'toast', msg: 'Lại gần thúng cá của Cô Ba để mua nhé 🐟' });
+        const f = RULES.FISH.find(x => x.id === m.kind); if (!f) return;
+        const bag = p.fishBag = p.fishBag || {}, inBag = Object.values(bag).reduce((a, n) => a + n, 0);
+        if (inBag >= RULES.FISH_RULES.bagMax) return ws.send({ t: 'toast', msg: `Giỏ đã đủ ${RULES.FISH_RULES.bagMax} con rồi, ra bến thả bớt đã nhé.` });
+        if (!RULES.useStamina(p, f.st, now)) return tired();
+        bag[f.id] = (bag[f.id] || 0) + 1; saveSoon();
+        return ws.send({ t: 'profile', profile: profileOf(me.pid), msg: `Cô Ba gói ${f.icon} ${f.name} vào giỏ · −${f.st} sinh lực. Ra mép bến thả để nhận phước nhé!` });
+      }
+      case 'fishRelease': {
+        if (!near(LAYOUT.release, LAYOUT.release.radius + 80)) return ws.send({ t: 'toast', msg: 'Ra tận mép bến rồi hãy thả cá nhé 🐟' });
+        const f = RULES.FISH.find(x => x.id === m.kind); if (!f) return;
+        const d = dd(p), bag = p.fishBag || {};
+        if (!(bag[f.id] > 0)) return ws.send({ t: 'toast', msg: `Giỏ chưa có ${f.name} — mua cá của Cô Ba trước rồi mới thả được nhé 🐟` });
+        if ((d.fish || 0) >= db.config.fishPerDay) return ws.send({ t: 'toast', msg: `Hôm nay bạn đã phóng sinh ${db.config.fishPerDay} lần rồi, để cá sông nghỉ ngơi nhé.` });
+        bag[f.id]--; d.fish = (d.fish || 0) + 1; p.phuoc += f.reward; bump('fishes');
+        const scooped = Math.random() < RULES.FISH_RULES.scoopRate; if (scooped) bump('scoops');
+        broadcast(room, { t: 'fish', id: me.id, name: me.name, kind: f.id, scooped, wish: clean(m.wish, 70) });
+        saveSoon();
+        return ws.send({ t: 'profile', profile: profileOf(me.pid), msg: `${f.icon} Đã phóng sinh ${f.name} · +${f.reward} phước${scooped ? ' (phước vẫn tính dù cá… quay về thúng Cô Ba 😅)' : ''}` });
+      }
       case 'buy': case 'equip': {
-        const list = m.kind === 'hat' ? RULES.HATS : m.kind === 'color' ? RULES.COLORS : null; if (!list) return;
+        const list = m.kind === 'hat' ? RULES.HATS : m.kind === 'color' ? RULES.COLORS : m.kind === 'outfit' ? RULES.OUTFITS : null; if (!list) return;
         const it = list.find(x => x.id === m.id); if (!it) return;
-        const owned = acc.items[m.kind === 'hat' ? 'hats' : 'colors'];
+        const owned = acc.items[m.kind + 's'];
         let bought = false;
         if (!owned.includes(it.id)) {
           if (m.t === 'equip') return;
@@ -731,7 +865,7 @@ function handleClient(ws, req) {
           if (p.phuoc < it.price) return ws.send({ t: 'toast', msg: `Cần ${it.price} phước để mua ${it.name}.` });
           p.phuoc -= it.price; owned.push(it.id); bump('purchases');
         }
-        if (m.kind === 'hat') { acc.hat = it.id; } else acc.color = it.id;
+        acc[m.kind] = it.id;
         look();
         return ws.send({ t: 'profile', profile: profileOf(me.pid), msg: bought ? `Đã mua ${it.name} · -${it.price} phước ✨` : `Đã thay ${it.name}` });
       }
@@ -794,6 +928,7 @@ function handleClient(ws, req) {
   ws.onclose = () => {
     clearTimeout(helloTimer);
     if (me && room) {
+      freeSeat();
       room.tug.offers.delete(me.id);
       const mt = room.tug.match; if (mt && (mt.a === me.id || mt.b === me.id)) endTug(room, mt.a === me.id ? mt.b : mt.a, true);
       else broadcast(room, { t: 'tugState', tug: tugState(room) });
@@ -804,6 +939,17 @@ function handleClient(ws, req) {
     }
   };
 }
+const briefsPub = () => (db.config.briefs || []).filter(b => b.active !== false).map(b => ({ id: b.id, name: b.name, desc: b.desc, icon: b.icon, rarity: b.rarity }));
+/* ---------- Bảng sám hối ---------- */
+function samhoiOut(pid, sort) {
+  const now = Date.now(), list = Object.entries(db.samhoi).filter(([, v]) => now - v.t < RULES.SAMHOI.ttl)
+    .map(([id, v]) => ({ id, text: v.text, t: v.t, n: v.n, left: Math.max(1, Math.ceil((RULES.SAMHOI.ttl - (now - v.t)) / 3600e3)), mine: v.by === pid, prayed: v.who.includes(pid) }))
+    .filter(x => sort !== 'mine' || x.mine);
+  list.sort(sort === 'hot' ? (a, b) => b.n - a.n || b.t - a.t : (a, b) => b.t - a.t);
+  return list.slice(0, 60);
+}
+function samhoiMine(pid) { const now = Date.now(), l = Object.values(db.samhoi).filter(v => v.by === pid && now - v.t < RULES.SAMHOI.ttl); return { count: l.length, prays: l.reduce((a, v) => a + v.n, 0) }; }
+setInterval(() => { const now = Date.now(); let n = 0; for (const k in db.samhoi) if (now - db.samhoi[k].t > RULES.SAMHOI.ttl) { delete db.samhoi[k]; n++; } if (n) save(); }, 600e3);
 /* ---------- Kéo co ---------- */
 function tugState(room) {
   const mt = room.tug.match;
@@ -870,7 +1016,7 @@ setInterval(() => refreshWeather(false), 15 * 60e3);
 const ipDigs = {};
 setInterval(() => { const dk = dayKey(); for (const k in ipDigs) if (!k.endsWith(dk)) delete ipDigs[k]; }, 3600e3);
 
-const pub = c => ({ id: c.id, name: c.name, color: c.color, hat: c.hat, hair: c.hair, x: Math.round(c.x), y: Math.round(c.y), dir: c.dir, moving: c.moving, pose: c.pose || '' });
+const pub = c => ({ id: c.id, name: c.name, color: c.color, hat: c.hat, hair: c.hair, outfit: c.outfit, x: Math.round(c.x), y: Math.round(c.y), dir: c.dir, moving: c.moving, pose: c.pose || '', seat: c.seat, stink: c.stink && c.stink > Date.now() ? c.stink - Date.now() : 0 });
 const roomList = () => [...rooms.values()].sort((a, b) => a.num - b.num).map(r => ({ id: r.id, name: r.name, num: r.num, online: r.clients.size, capacity: db.config.roomCapacity }));
 function broadcastRoomInfo() {
   const info = { t: 'rooms', rooms: roomList() };
@@ -921,7 +1067,7 @@ function statsPayload() {
   for (let i = 13; i >= 0; i--) {
     const k = new Date(Date.now() + 7 * 3600e3 - i * 86400e3).toISOString().slice(0, 10);
     const d = db.daily[k] || { visits: 0, u: {}, newPlayers: 0, incense: 0, digs: 0, wins: 0, feeds: 0, bells: 0, peak: 0 };
-    days.push({ day: k, fortunes: d.fortunes || 0, shouts: d.shouts || 0, tugs: d.tugs || 0, sweeps: d.sweeps || 0, meals: d.meals || 0, purchases: d.purchases || 0, registers: d.registers || 0, logins: d.logins || 0, visits: d.visits, uniques: Object.keys(d.u).length, newPlayers: d.newPlayers, incense: d.incense, digs: d.digs, wins: d.wins, feeds: d.feeds, bells: d.bells, bellHits: d.bellHits || 0, chants: d.chants || 0, apps: d.apps || {}, peak: d.peak });
+    days.push({ day: k, fortunes: d.fortunes || 0, shouts: d.shouts || 0, tugs: d.tugs || 0, sweeps: d.sweeps || 0, meals: d.meals || 0, purchases: d.purchases || 0, registers: d.registers || 0, logins: d.logins || 0, visits: d.visits, uniques: Object.keys(d.u).length, newPlayers: d.newPlayers, incense: d.incense, digs: d.digs, wins: d.wins, feeds: d.feeds, bells: d.bells, bellHits: d.bellHits || 0, chants: d.chants || 0, fishes: d.fishes || 0, scoops: d.scoops || 0, poops: d.poops || 0, casts: d.casts || 0, catches: d.catches || 0, pens: d.pens || 0, penPass: d.penPass || 0, samhois: d.samhois || 0, prays: d.prays || 0, apps: d.apps || {}, peak: d.peak });
   }
   const hours = [];
   for (let i = 23; i >= 0; i--) {
@@ -934,7 +1080,7 @@ function statsPayload() {
     online: totalOnline(), rooms: roomList(), capacity: db.config.roomCapacity,
     today: days[days.length - 1], days, hours, totals: db.totals,
     players: Object.keys(db.players).length, accounts: Object.keys(db.accounts).length, totalRate, adminPwDefault: ADMIN_PW_DEFAULT, adminPwWeak: ADMIN_PW_WEAK, storage: USE_REDIS ? 'redis' : 'file',
-    weather: weatherOut(), cities: RULES.CITIES.map(c => ({ id: c.id, name: c.name })), weatherKinds: RULES.WEATHER, altarNames: Object.fromEntries([['all', 'Thắp chung (lư hương sân)'], ...db.config.altar.map(a => [a.id, a.name])]),
+    rarity: RULES.RARITY, weather: weatherOut(), cities: RULES.CITIES.map(c => ({ id: c.id, name: c.name })), weatherKinds: RULES.WEATHER, altarNames: Object.fromEntries([['all', 'Thắp chung (lư hương sân)'], ...db.config.altar.map(a => [a.id, a.name])]),
     lastWins: db.awards.slice(-8).reverse().map(a => ({ name: a.name, title: a.title, code: a.code, time: a.time, room: a.room }))
   };
 }
@@ -978,12 +1124,18 @@ const server = http.createServer(async (req, res) => {
       const c = db.config;
       if (b.roomCapacity) c.roomCapacity = Math.max(1, Math.min(500, b.roomCapacity | 0));
       if (b.maxAccountsPerIpPerDay) c.maxAccountsPerIpPerDay = Math.max(1, Math.min(1000, b.maxAccountsPerIpPerDay | 0));
-      for (const [k, lo, hi] of [['startPhuoc', 0, 10000], ['fortuneCost', 0, 1000], ['shoutCost', 0, 1000], ['sweepReward', 0, 1000], ['leafRegrowSec', 5, 86400], ['fortunePerDay', 1, 20], ['bellPerDay', 0, 100], ['bellReward', 0, 1000], ['bellPenalty', 0, 1000], ['chantReward', 0, 1000]]) if (b[k] !== undefined && b[k] !== '') c[k] = Math.max(lo, Math.min(hi, b[k] | 0));
+      for (const [k, lo, hi] of [['startPhuoc', 0, 10000], ['fortuneCost', 0, 1000], ['shoutCost', 0, 1000], ['sweepReward', 0, 1000], ['leafRegrowSec', 5, 86400], ['fortunePerDay', 1, 20], ['bellPerDay', 0, 100], ['bellReward', 0, 1000], ['bellPenalty', 0, 1000], ['chantReward', 0, 1000], ['fishPerDay', 0, 100], ['penPerDay', 0, 100], ['penReward', 0, 1000], ['samhoiPrice', 0, 1000], ['poopRate', 0, 100], ['cauPerDay', 0, 200]]) if (b[k] !== undefined && b[k] !== '') c[k] = Math.max(lo, Math.min(hi, b[k] | 0));
       if (b.fortunes !== undefined) { const list = (Array.isArray(b.fortunes) ? b.fortunes : String(b.fortunes).split('\n')).map(x => clean(x, 300)).filter(Boolean).slice(0, 500); if (list.length) c.fortunes = list; }
       if (b.bannedWords !== undefined) c.bannedWords = (Array.isArray(b.bannedWords) ? b.bannedWords : String(b.bannedWords).split(/[\n,]/)).map(x => clean(x, 40).toLowerCase()).filter(Boolean).slice(0, 500);
       if (b.digsPerDay !== undefined) c.digsPerDay = Math.max(0, Math.min(100, b.digsPerDay | 0));
       if (b.plotRegrowSec) c.plotRegrowSec = Math.max(5, Math.min(86400, b.plotRegrowSec | 0));
       if (b.incenseCooldownSec !== undefined) c.incenseCooldownSec = Math.max(0, Math.min(3600, b.incenseCooldownSec | 0));
+      if (Array.isArray(b.briefs)) {
+        const seen = new Set();
+        const list = b.briefs.slice(0, 200).map((x, i) => ({ id: (clean(x.id, 24) || 'b' + Date.now().toString(36) + i).replace(/[^a-zA-Z0-9_-]/g, ''), rarity: RULES.RARITY.some(r => r.id === x.rarity) ? x.rarity : 'thuong', icon: clean(x.icon, 8) || '📄', name: clean(x.name, 60), desc: clean(x.desc, 160), active: x.active !== false }))
+          .filter(x => x.name && x.id && !seen.has(x.id) && seen.add(x.id));
+        if (list.length) { c.briefs = list; for (const r of rooms.values()) broadcast(r, { t: 'briefs', briefs: briefsPub() }); }
+      }
       if (b.weatherMode) c.weatherMode = b.weatherMode === 'manual' ? 'manual' : 'auto';
       if (b.weatherCity && RULES.CITIES.some(x => x.id === b.weatherCity)) c.weatherCity = b.weatherCity;
       if (b.weatherManual && RULES.WEATHER[b.weatherManual]) c.weatherManual = b.weatherManual;
@@ -994,6 +1146,8 @@ const server = http.createServer(async (req, res) => {
       save();
       return json(res, 200, c);
     }
+    if (p === '/api/admin/samhoi' && req.method === 'GET') return json(res, 200, Object.entries(db.samhoi).sort((a, b) => b[1].t - a[1].t).map(([id, v]) => ({ id, text: v.text, t: v.t, n: v.n, by: (accOf(v.by) || {}).name || '?' })));
+    if (p === '/api/admin/samhoi' && req.method === 'DELETE') { const id = url.searchParams.get('id'); if (db.samhoi[id]) { delete db.samhoi[id]; save(); } return json(res, 200, { ok: true }); }
     if (p === '/api/admin/vouchers' && req.method === 'GET') return json(res, 200, db.vouchers.map(voucherOut));
     if (p === '/api/admin/vouchers' && req.method === 'POST') {
       const b = await readBody(req);
