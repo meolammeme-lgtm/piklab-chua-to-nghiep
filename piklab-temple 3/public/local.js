@@ -171,7 +171,7 @@ window.LocalServer = function (deliver) {
         if (!b.moving) arrive(b);
         else if (Math.random() < .0012) emit({ t: 'say', id: b.id, text: SHOUTS[Math.random() * SHOUTS.length | 0] });   // vừa đi vừa khẩu nghiệp
         moved.push([b.id, Math.round(b.x), Math.round(b.y), b.dir, b.moving ? 1 : 0]);
-      } else if (b.tugging) { /* đang kéo co */ } else if ((b.wait -= dt) <= 0) {
+      } else if (b.tugging || b.coing) { /* đang kéo co / đánh cờ */ } else if ((b.wait -= dt) <= 0) {
         if (b.pose) { b.pose = ''; b.seat = null; emit({ t: 'pose', id: b.id, pose: '' }); }
         const kinds = ['altar', 'bowl', 'garden', 'pen', 'wander', 'bell', 'shout', 'sweep', 'eat', 'cushion', 'fortune', 'bell', 'fish', 'samhoi', 'pentool', 'cau', 'cau'];
         const kind = kinds[Math.random() * kinds.length | 0], list = POI[kind], tgt = list[Math.random() * list.length | 0];
@@ -232,6 +232,74 @@ window.LocalServer = function (deliver) {
     emit({ t: 'tugState', tug: tugState(), serverTime: Date.now() }); emit({ t: 'profile', profile: profile() });
   }
 
+  /* ---- Đình Cờ (bản demo): bot nhận kèo và tự đánh ---- */
+  const co = { offers: [], games: [] };
+  const coState = () => ({ offers: co.offers.map(o => ({ id: o.id, name: o.name, game: o.game, bet: o.bet })), games: co.games.map(g => ({ id: g.id, game: g.game, bet: g.bet, xName: g.names[g.x], oName: g.names[g.o], table: g.table })) });
+  const coOut = g => ({ id: g.id, game: g.game, bet: g.bet, table: g.table, x: g.x, o: g.o, names: g.names, s: g.s, clock: g.clock, turnStart: g.turnStart, turn: RU.coTurnId(g), drawBy: g.drawBy, serverTime: Date.now(), end: g.end || null });
+  const coMine = () => co.games.find(g => g.x === 'me' || g.o === 'me');
+  const PV = { P: 1, N: 3, B: 3.2, R: 5, Q: 9, K: 0 };
+  function chessBot(s) {                               // bot cờ vua 1 nước: ưu tiên chiếu hết, ăn quân lời, tránh để quân bị ăn
+    let best = null, bs = -1e9;
+    for (const m of RU.CHESS.legal(s)) {
+      const n = RU.CHESS.apply(s, m), st = RU.CHESS.status(n), moved = m.promo || s.b[m.from][1];
+      let sc = (n.cap ? PV[n.cap[1]] : 0) + (m.promo ? 8 : 0) + Math.random() * .4;
+      if (st === 'mate') sc += 1000; else if (st === 'stalemate') sc -= 50; else if (st === 'check') sc += .3;
+      if (RU.CHESS.attacked(n.b, m.to, n.turn)) sc -= PV[moved] * .9;
+      if (sc > bs) { bs = sc; best = m; }
+    }
+    return best && { from: best.from, to: best.to, promo: best.promo };
+  }
+  function caroBot(b, p) {                             // bot caro: chấm điểm từng ô theo thế công (của mình) và thế thủ (chặn đối thủ)
+    const N = RU.CARO.size, q = 3 - p, cand = [];
+    for (let i = 0; i < b.length; i++) { if (b[i]) continue; const x = i % N, y = i / N | 0; let near = false; for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < N && yy < N && b[yy * N + xx]) { near = true; break; } } if (near) cand.push(i); }
+    if (!cand.length) return { i: (N / 2 | 0) * N + (N / 2 | 0) };
+    const lineScore = (i, who) => { let t = 0; const x = i % N, y = i / N | 0;
+      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) { let n = 1, open = 0;
+        for (const s of [1, -1]) { let k = 1; for (; ; k++) { const xx = x + dx * k * s, yy = y + dy * k * s; if (xx < 0 || yy < 0 || xx >= N || yy >= N) break; const v = b[yy * N + xx]; if (v === who) n++; else { if (!v) open++; break; } } }
+        t += n >= 5 ? 1e6 : n === 4 ? (open === 2 ? 5e4 : open ? 4e3 : 0) : n === 3 ? (open === 2 ? 3e3 : open ? 150 : 0) : n === 2 ? (open === 2 ? 120 : 12) : 2; }
+      return t; };
+    let best = cand[0], bs = -1;
+    for (const i of cand) { const sc = lineScore(i, p) * 1.1 + lineScore(i, q) + Math.random() * 5; if (sc > bs) { bs = sc; best = i; } }
+    return { i: best };
+  }
+  function botCoAccept() {
+    const o = co.offers.find(x => x.id === 'me'); if (!o || coMine()) return;
+    const bot = bots.find(x => !x.tugging && !x.coing); if (!bot) return;
+    if (!RU.useStamina(prof, RU.CO.cost, Date.now())) { co.offers = []; emit({ t: 'coState', co: coState() }); return tired(); }
+    prof.phuoc -= o.bet; co.offers = [];
+    const busy = co.games.map(g => g.table), table = [...L.coTables.filter(t => (o.game === 'chess') === (t.id < 2)), ...L.coTables].find(t => !busy.includes(t.id));
+    const meFirst = Math.random() < .5, g = RU.coNew(o.game, meFirst ? 'me' : bot.id, meFirst ? bot.id : 'me', Date.now());
+    Object.assign(g, { id: 'g' + Date.now(), bet: o.bet, table: table.id, names: { me: me.name, [bot.id]: bot.name }, bot: bot.id });
+    co.games.push(g);
+    bot.coing = true; bot.path = []; bot.moving = false;
+    [[g.x, table.seats[0]], [g.o, table.seats[1]]].forEach(([id, st]) => { if (id === 'me') { me.x = st.x; me.y = st.y; } else { bot.x = st.x; bot.y = st.y; bot.pose = 'sit'; emit({ t: 's', p: [[bot.id, st.x, st.y, 1, 0]] }); } emit({ t: 'pose', id, pose: 'sit', x: st.x, y: st.y, yaw: st.yaw }); });
+    emit({ t: 'feed', msg: `♟️ ${bot.name} nhận kèo ${RU.CO.names[o.game].toLowerCase()} ${o.bet} phước của bạn!` });
+    emit({ t: 'coGame', g: coOut(g) }); emit({ t: 'coState', co: coState() }); emit({ t: 'profile', profile: profile() });
+    botCoTurn(g);
+  }
+  function botCoTurn(g) {
+    if (g.over || RU.coTurnId(g) !== g.bot) return;
+    setTimeout(() => {
+      if (g.over) return;
+      const mv = g.game === 'chess' ? chessBot(g.s) : caroBot(g.s.b, g.s.turn); if (!mv) return;
+      const r = RU.coPlay(g, g.bot, mv, Date.now());
+      if (r.end) return endCo(g, r.end.winner, r.end.reason);
+      emit({ t: 'coGame', g: coOut(g) });
+    }, 700 + Math.random() * 1300);
+  }
+  function endCo(g, winner, reason) {
+    if (g.over) return; g.over = true; g.end = { winner, reason };
+    co.games = co.games.filter(x => x !== g);
+    if (winner === 'me') prof.phuoc += g.bet * 2; else if (!winner) prof.phuoc += g.bet;
+    const bot = bots.find(x => x.id === g.bot); if (bot) { bot.coing = false; bot.wait = 3; }
+    emit({ t: 'coGame', g: coOut(g) });
+    for (const id of ['me', g.bot]) emit({ t: 'pose', id, pose: '' });
+    const nm = RU.CO.names[g.game].toLowerCase();
+    emit({ t: 'feed', msg: winner ? `♟️ ${g.names[winner]} thắng ${g.names[RU.coOther(g, winner)]} ván ${nm}, ăn ${g.bet} phước!` : `♟️ Ván ${nm} hoà, hoàn lại phước cược.` });
+    emit({ t: 'coState', co: coState() }); emit({ t: 'profile', profile: profile() });
+  }
+  setInterval(() => { for (const g of co.games.slice()) { const late = RU.coTimeout(g, Date.now()); if (late) { g.clock[late] = 0; endCo(g, RU.coOther(g, late), 'time'); } } }, 500);
+
   return {
     demo: true,
     config: { cfg, wx: () => wxState, setWx(o) { Object.assign(wxState, o); put('pk_demo_wx', { city: wxState.city, mode: wxState.mode, manual: wxState.manual }); fetchWeather(); }, altar, vouchers, save() { put('pk_demo_cfg', cfg); put('pk_demo_altar', altar); put('pk_demo_vouchers', vouchers); }, reset() { prof.digsToday = 0; prof.dd = null; emit({ t: 'profile', profile: profile(), msg: 'Đã hồi lại lượt đào, chuông, quẻ hôm nay' }); }, defaults: { altar: DEFAULT_ALTAR, vouchers: DEFAULT_VOUCHERS } },
@@ -243,7 +311,7 @@ window.LocalServer = function (deliver) {
           profKey = 'pk_demo_profile_' + acc.pid; prof = Object.assign({ phuoc: 20, rau: 0, digDay: '', digsToday: 0, wins: [] }, get(profKey, {}));
           ensureAcc(acc); saveAccount(acc);
           me = { id: 'me', name: acc.name, color: acc.color, hat: acc.hat, hair: acc.hair, outfit: acc.outfit, x: L.spawn.x, y: L.spawn.y, dir: 1, lastIncense: 0, lastSay: 0 };
-          emit({ t: 'welcome', you: pub(me), room: { id: 'chua-1', name: 'Chùa 1', num: 1, capacity: 30 }, players: bots.map(pub), plots, incense, altar, templeName: 'Chùa Tổ Nghiệp Designer', shopUrl: 'https://piklab.vn', profile: profile(), pid: 'demo', rooms: rooms(), serverTime: Date.now(), regrowSec: cfg.regrowSec, demo: true, leaves, leafRegrowSec: 45, tug: tugState(), prices, weather: wxOut(), ver: RU.VERSION, briefs: RU.DEFAULT_BRIEFS });
+          emit({ t: 'welcome', you: pub(me), room: { id: 'chua-1', name: 'Chùa 1', num: 1, capacity: 30 }, players: bots.map(pub), plots, incense, altar, templeName: 'Chùa Tổ Nghiệp Designer', shopUrl: 'https://piklab.vn', profile: profile(), pid: 'demo', rooms: rooms(), serverTime: Date.now(), regrowSec: cfg.regrowSec, demo: true, leaves, leafRegrowSec: 45, tug: tugState(), co: coState(), prices, weather: wxOut(), ver: RU.VERSION, briefs: RU.DEFAULT_BRIEFS });
           fetchWeather();
           setTimeout(() => lightIncense(bots[1], 'ps', 'Khách duyệt bản đầu tiên'), 2500);
           break;
@@ -467,6 +535,32 @@ window.LocalServer = function (deliver) {
           break;
         }
         case 'tugCancel': tug.offers = []; emit({ t: 'tugState', tug: tugState() }); break;
+        case 'coOffer': {
+          const bet = +m.bet, game = m.game === 'caro' ? 'caro' : 'chess', c = L.market.co;
+          if (!RU.CO.bets.includes(bet) || Math.abs(me.x - c.x) > c.w / 2 + 90 || Math.abs(me.y - c.y) > c.h / 2 + 90) return;
+          if (coMine()) return emit({ t: 'toast', msg: 'Bạn đang có ván cờ dở, đánh xong đã nhé ♟️' });
+          if (prof.phuoc < bet) return emit({ t: 'toast', msg: `Cược ${bet} phước mà bạn chưa đủ phước.` });
+          if (RU.stamina(prof, Date.now()) < RU.CO.cost) return tired();
+          co.offers = [{ id: 'me', name: me.name, game, bet }]; emit({ t: 'coState', co: coState() });
+          setTimeout(botCoAccept, 2500 + Math.random() * 1500); break;
+        }
+        case 'coCancel': co.offers = []; emit({ t: 'coState', co: coState() }); break;
+        case 'coAccept': emit({ t: 'toast', msg: 'Kèo này không còn nữa.' }); break;
+        case 'coSync': { const g = coMine(); if (g) emit({ t: 'coGame', g: coOut(g) }); break; }
+        case 'coMove': {
+          const g = coMine(); if (!g) return;
+          const r = RU.coPlay(g, 'me', m.mv, Date.now());
+          if (r.err) return emit({ t: 'coGame', g: coOut(g) });
+          if (r.end) return endCo(g, r.end.winner, r.end.reason);
+          emit({ t: 'coGame', g: coOut(g) }); botCoTurn(g); break;
+        }
+        case 'coResign': { const g = coMine(); if (g) endCo(g, g.bot, 'resign'); break; }
+        case 'coDraw': {
+          const g = coMine(); if (!g || g.drawBy) return;
+          g.drawBy = 'me'; emit({ t: 'coGame', g: coOut(g) });
+          setTimeout(() => { if (g.over || g.drawBy !== 'me') return; if (Math.random() < .4) endCo(g, null, 'agree'); else { g.drawBy = null; emit({ t: 'toast', msg: `${g.names[g.bot]} từ chối hoà — đánh tiếp thôi!` }); emit({ t: 'coGame', g: coOut(g) }); } }, 1500);
+          break;
+        }
         case 'tug': {
           const mt = tug.match, now = Date.now(); if (!mt) return;
           if (now < mt.startAt - 150 || now > mt.endAt + RU.TUG.grace) return;
