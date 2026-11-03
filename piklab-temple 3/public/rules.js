@@ -3,7 +3,7 @@
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.RULES = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
-  const VERSION = '2.4.1';   // tăng mỗi đợt: server & trang game phải cùng phiên bản
+  const VERSION = '2.4.2';   // tăng mỗi đợt: server & trang game phải cùng phiên bản
   const STAMINA_MAX = 100;
   const REGEN_MS = 90e3;                 // tự hồi 1 sinh lực mỗi 90 giây (để không bao giờ bị kẹt)
 
@@ -323,6 +323,10 @@
     return { ok: true, end };
   }
   const coTimeout = (g, now) => { const id = coTurnId(g); return g.clock[id] - (now - g.turnStart) <= 0 ? id : null; };
+  // Hành động của nhân vật: emote (diễn vài giây) và tư thế giữ nguyên tới khi di chuyển
+  const EMOTES = { pray: ['🙏', 'Chắp tay'], bow: ['🙇', 'Vái'], heart: ['💛', 'Thương'], wave: ['👋', 'Chào'], zen: ['🧘', 'Tĩnh tâm'],
+    dance: ['💃', 'Nhảy múa'], jump: ['🦘', 'Nhảy cẫng'], clap: ['👏', 'Vỗ tay'], laugh: ['😂', 'Cười lăn'], cry: ['😭', 'Khóc'], think: ['🤔', 'Suy nghĩ'], cheer: ['🎉', 'Ăn mừng'], kowtow: ['🙇', 'Lạy'] };
+  const POSES = { rest: ['🧘', 'Ngồi'], nap: ['😴', 'Ngủ gật'] };
   // Kèo thách đấu (kéo co, đánh cờ) tự huỷ nếu không ai nhận — phước chỉ bị trừ khi trận thật sự bắt đầu
   const OFFER_TTL = 90e3;
   // Bot đánh cờ (Đường Tăng trên server, bạn đồng tu trong bản demo): cờ vua nhìn trước 1 nước, caro chấm điểm thế công/thủ
@@ -413,5 +417,5 @@
     for (const w of banned || []) if (w) t = t.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => '*'.repeat(m.length));
     return t;
   }
-  return { OFFER_TTL, coBot, TANG, TANG_SAYS, TANG_TALK, CO, CHESS, CARO, coNew, coTurnId, coOther, coPlay, coTimeout, OUTFITS, COBA_SAYS, POOP, RARITY, CAU, DEFAULT_BRIEFS, rollBrief, VERSION, FISH, FISH_RULES, SAMHOI, PEN_LESSONS, PEN, penScore, penSegs, sampleSegs, BELL, bellPos, CHANT, CITIES, WEATHER, weatherKind, STAMINA_MAX, REGEN_MS, COST, COLORS, HATS, HAIRS, FOODS, TUG_BETS, TUG, DEFAULT_FORTUNES, DEFAULT_BANNED, stamina, useStamina, filterText };
+  return { EMOTES, POSES, OFFER_TTL, coBot, TANG, TANG_SAYS, TANG_TALK, CO, CHESS, CARO, coNew, coTurnId, coOther, coPlay, coTimeout, OUTFITS, COBA_SAYS, POOP, RARITY, CAU, DEFAULT_BRIEFS, rollBrief, VERSION, FISH, FISH_RULES, SAMHOI, PEN_LESSONS, PEN, penScore, penSegs, sampleSegs, BELL, bellPos, CHANT, CITIES, WEATHER, weatherKind, STAMINA_MAX, REGEN_MS, COST, COLORS, HATS, HAIRS, FOODS, TUG_BETS, TUG, DEFAULT_FORTUNES, DEFAULT_BANNED, stamina, useStamina, filterText };
 });
