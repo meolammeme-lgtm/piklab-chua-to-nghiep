@@ -3,7 +3,7 @@
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.RULES = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
-  const VERSION = '2.4';   // tăng mỗi đợt: server & trang game phải cùng phiên bản
+  const VERSION = '2.4.1';   // tăng mỗi đợt: server & trang game phải cùng phiên bản
   const STAMINA_MAX = 100;
   const REGEN_MS = 90e3;                 // tự hồi 1 sinh lực mỗi 90 giây (để không bao giờ bị kẹt)
 
@@ -323,6 +323,56 @@
     return { ok: true, end };
   }
   const coTimeout = (g, now) => { const id = coTurnId(g); return g.clock[id] - (now - g.turnStart) <= 0 ? id : null; };
+  // Kèo thách đấu (kéo co, đánh cờ) tự huỷ nếu không ai nhận — phước chỉ bị trừ khi trận thật sự bắt đầu
+  const OFFER_TTL = 90e3;
+  // Bot đánh cờ (Đường Tăng trên server, bạn đồng tu trong bản demo): cờ vua nhìn trước 1 nước, caro chấm điểm thế công/thủ
+  const PV = { P: 1, N: 3, B: 3.2, R: 5, Q: 9, K: 0 };
+  function chessBot(s) {
+    let best = null, bs = -1e9;
+    for (const m of CHESS.legal(s)) {
+      const n = CHESS.apply(s, m), st = CHESS.status(n), moved = m.promo || s.b[m.from][1];
+      let sc = (n.cap ? PV[n.cap[1]] : 0) + (m.promo ? 8 : 0) + Math.random() * .4;
+      if (st === 'mate') sc += 1000; else if (st === 'stalemate') sc -= 50; else if (st === 'check') sc += .3;
+      if (CHESS.attacked(n.b, m.to, n.turn)) sc -= PV[moved] * .9;
+      if (sc > bs) { bs = sc; best = m; }
+    }
+    return best && { from: best.from, to: best.to, promo: best.promo };
+  }
+  function caroBot(b, p) {
+    const N = CARO.size, q = 3 - p, cand = [];
+    for (let i = 0; i < b.length; i++) { if (b[i]) continue; const x = i % N, y = i / N | 0; let near = false; for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < N && yy < N && b[yy * N + xx]) { near = true; break; } } if (near) cand.push(i); }
+    if (!cand.length) return { i: (N / 2 | 0) * N + (N / 2 | 0) };
+    const lineScore = (i, who) => { let t = 0; const x = i % N, y = i / N | 0;
+      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) { let n = 1, open = 0;
+        for (const s of [1, -1]) for (let k = 1; ; k++) { const xx = x + dx * k * s, yy = y + dy * k * s; if (xx < 0 || yy < 0 || xx >= N || yy >= N) break; const v = b[yy * N + xx]; if (v === who) n++; else { if (!v) open++; break; } }
+        t += n >= 5 ? 1e6 : n === 4 ? (open === 2 ? 5e4 : open ? 4e3 : 0) : n === 3 ? (open === 2 ? 3e3 : open ? 150 : 0) : n === 2 ? (open === 2 ? 120 : 12) : 2; }
+      return t; };
+    let best = cand[0], bs = -1;
+    for (const i of cand) { const sc = lineScore(i, p) * 1.1 + lineScore(i, q) + Math.random() * 5; if (sc > bs) { bs = sc; best = i; } }
+    return { i: best };
+  }
+  const coBot = g => g.game === 'chess' ? chessBot(g.s) : caroBot(g.s.b, g.s.turn);
+  // ---- Đường Tăng: đi lang thang trong chùa tìm Ngộ Không, thỉnh thoảng ra Đình Cờ nhận kèo ----
+  const TANG = { id: 'tang', name: 'Đường Tăng', color: '#a8382c', hat: 'tylu', hair: 'bald', outfit: 'trang', speed: 95 };
+  const TANG_SAYS = [
+    'Ngộ Không ơi… con ở đâu rồi?',
+    'Chư vị thí chủ có thấy con khỉ nào đi ngang qua đây không?',
+    'Bát Giới bảo Ngộ Không đi mua cà phê sữa đá, ba tiếng chưa về…',
+    'Ngộ Không lại cân đẩu vân đi đâu mất, để bần tăng tự xuất file một mình.',
+    'A Di Đà Phật. Gậy Như Ý bỏ quên ở đây, mà chủ của nó thì không thấy đâu.',
+    'Sa Tăng nói Ngộ Không đang Photoshop mặt khỉ thành mặt người…',
+    'Thỉnh kinh thì dễ, tìm Ngộ Không mới khó.',
+    'Ngộ Không ơi, về đi, khách đòi sửa logo lần thứ 81 rồi!',
+    'Bần tăng đi khắp chùa rồi, chỉ còn chưa xem gốc cây đa thôi…',
+    'Ai thấy Ngộ Không nhắn giùm: sư phụ không giận đâu, chỉ niệm chú nhẹ thôi.'
+  ];
+  const TANG_TALK = [                                  // khi người chơi bắt chuyện
+    'Thí chủ có thấy đệ tử Ngộ Không của bần tăng đâu không?',
+    'A Di Đà Phật. Thí chủ muốn đánh ván cờ thì ra Đình Cờ ra kèo, bần tăng rảnh sẽ ghé.',
+    'Bần tăng đánh cờ không giỏi, nhưng tâm rất tĩnh.',
+    'Đi thỉnh kinh mười bốn năm, chưa thấy brief nào khó bằng brief ở đây.',
+    'Nếu thấy con khỉ cầm gậy vàng, thí chủ cứ gọi bần tăng nhé.'
+  ];
   const TUG = { win: 18, ms: 12000, countdown: 3000, minGap: 70, grace: 300 };   // minGap: tối đa ~14 lần/giây, grace: bù độ trễ mạng   // kéo lệch 18 lần là thắng, tối đa 12 giây
 
   const DEFAULT_FORTUNES = [
@@ -363,5 +413,5 @@
     for (const w of banned || []) if (w) t = t.replace(new RegExp(w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), m => '*'.repeat(m.length));
     return t;
   }
-  return { CO, CHESS, CARO, coNew, coTurnId, coOther, coPlay, coTimeout, OUTFITS, COBA_SAYS, POOP, RARITY, CAU, DEFAULT_BRIEFS, rollBrief, VERSION, FISH, FISH_RULES, SAMHOI, PEN_LESSONS, PEN, penScore, penSegs, sampleSegs, BELL, bellPos, CHANT, CITIES, WEATHER, weatherKind, STAMINA_MAX, REGEN_MS, COST, COLORS, HATS, HAIRS, FOODS, TUG_BETS, TUG, DEFAULT_FORTUNES, DEFAULT_BANNED, stamina, useStamina, filterText };
+  return { OFFER_TTL, coBot, TANG, TANG_SAYS, TANG_TALK, CO, CHESS, CARO, coNew, coTurnId, coOther, coPlay, coTimeout, OUTFITS, COBA_SAYS, POOP, RARITY, CAU, DEFAULT_BRIEFS, rollBrief, VERSION, FISH, FISH_RULES, SAMHOI, PEN_LESSONS, PEN, penScore, penSegs, sampleSegs, BELL, bellPos, CHANT, CITIES, WEATHER, weatherKind, STAMINA_MAX, REGEN_MS, COST, COLORS, HATS, HAIRS, FOODS, TUG_BETS, TUG, DEFAULT_FORTUNES, DEFAULT_BANNED, stamina, useStamina, filterText };
 });
