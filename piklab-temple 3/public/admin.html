@@ -64,6 +64,20 @@ input:focus, textarea:focus { outline: none; border-color: var(--gold); }
 .feed { margin: 0; padding: 0; }
 code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--red); font-weight: 600; }
 .brief-row { display: grid; grid-template-columns: 60px 1.2fr 1.6fr 130px 110px auto; gap: 8px; align-items: center; margin-bottom: 6px; } .brief-row .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; } .brief-row .chk input { width: auto; }
+/* Thông báo chạy chữ */
+.an-bar { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 6px 0 8px; border-radius: 999px; background: linear-gradient(180deg, #a3362a, #7c2318); border: 1.5px solid #e8b65a; color: #fff6df; box-shadow: 0 6px 18px rgba(80,20,10,.25); overflow: hidden; }
+.an-bar.event { background: linear-gradient(180deg, #2f8a7a, #1f6357); border-color: #9fe0c9; }
+.an-bar.warn { background: linear-gradient(180deg, #d0731f, #a24f12); border-color: #ffd28a; }
+.an-bar .an-tag { flex: none; background: #e8b65a; color: #5a1a0f; font-weight: 700; font-size: 11px; letter-spacing: .06em; padding: 5px 10px; border-radius: 999px; }
+.an-bar.event .an-tag { background: #9fe0c9; color: #0f3d35; } .an-bar.warn .an-tag { background: #ffd28a; color: #5c2a05; }
+.an-bar .an-track { flex: 1; overflow: hidden; white-space: nowrap; mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, #000 4%, #000 96%, transparent); }
+.an-bar .an-run { display: inline-block; padding-left: 100%; font-weight: 600; animation: anRun 14s linear infinite; }
+@keyframes anRun { to { transform: translateX(-100%); } }
+.an-cur { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fffdf8; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.an-cur .t { flex: 1; min-width: 220px; }
+.dur-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dur-chips button { border: 1.5px solid var(--line); background: #fffdf8; border-radius: 999px; padding: 6px 12px; cursor: pointer; color: var(--ink); font-weight: 600; font-size: 12.5px; }
+.dur-chips button.on { border-color: var(--red); color: var(--red); background: #fbeee9; }
 </style>
 </head>
 <body>
@@ -83,6 +97,7 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
     <button data-tab="vouchers">🎟️ Voucher &amp; tỉ lệ</button>
     <button data-tab="accounts">👤 Người chơi</button>
     <button data-tab="awards">🏆 Người trúng thưởng</button>
+    <button data-tab="announce">📣 Thông báo</button>
     <button data-tab="settings">⚙️ Cài đặt</button>
   </nav>
   <main>
@@ -146,6 +161,27 @@ code { background: #f6ecd8; padding: 2px 6px; border-radius: 6px; color: var(--r
         <button class="btn ghost" id="csvBtn">⬇ Xuất CSV</button>
       </div>
       <div style="overflow-x:auto;margin-top:12px"><table id="aTbl"></table></div>
+    </section>
+
+    <!-- Thông báo chạy chữ -->
+    <section id="tab-announce" class="hidden">
+      <h2>Gửi thông báo chạy chữ</h2>
+      <p class="muted" style="margin-top:-4px">Thông báo hiện thành dòng chữ chạy ngang phía trên màn hình của <b>mọi người chơi ở mọi khuôn viên</b> ngay lập tức, kể cả người vào sau, rồi tự ẩn khi hết thời gian. Gửi thông báo mới sẽ thay thông báo đang chạy.</p>
+      <div class="form">
+        <label class="full">Nội dung <textarea id="anText" maxlength="200" placeholder="VD: 🎉 Tối nay 20h–22h đào rau nhân đôi tỉ lệ trúng voucher PikLab!" style="font-family:inherit;font-size:14px;min-height:70px"></textarea><span class="muted" style="font-weight:500" id="anCount">0/200 ký tự</span></label>
+        <label class="full">Hiển thị trong
+          <div class="dur-chips" id="anDur"><button type="button" data-m="5">5 phút</button><button type="button" data-m="15">15 phút</button><button type="button" data-m="30">30 phút</button><button type="button" data-m="60" class="on">1 giờ</button><button type="button" data-m="180">3 giờ</button><button type="button" data-m="720">12 giờ</button><button type="button" data-m="1440">1 ngày</button><button type="button" data-m="4320">3 ngày</button><button type="button" data-m="10080">7 ngày</button><button type="button" data-m="custom">Tuỳ chọn…</button></div>
+        </label>
+        <label id="anCustomL" class="hidden">Số phút (1 – 10080) <input id="anCustom" type="number" min="1" max="10080" value="45"></label>
+        <label>Kiểu thông báo <select id="anTone"><option value="info">📣 Thông báo · đỏ son</option><option value="event">🎉 Sự kiện / khuyến mãi · xanh ngọc</option><option value="warn">⚠️ Cảnh báo / bảo trì · cam</option></select></label>
+      </div>
+      <h2>Xem trước</h2>
+      <div class="an-bar" id="anPreview"><span class="an-tag">📣 THÔNG BÁO</span><div class="an-track"><span class="an-run" id="anPrevText">Nội dung thông báo sẽ chạy ở đây…</span></div></div>
+      <div style="display:flex;gap:8px;margin-top:14px;align-items:center"><button class="btn" id="anSend">📣 Phát thông báo</button><span class="muted" id="anMsg"></span></div>
+      <h2>Đang hiển thị</h2>
+      <div id="anCurrent"></div>
+      <h2>Đã gửi gần đây</h2>
+      <ul class="feed" id="anLog"></ul>
     </section>
 
     <!-- Cài đặt -->
@@ -239,7 +275,37 @@ document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
 });
 
 function start() { $('#loginView').classList.add('hidden'); $('#app').classList.remove('hidden'); refresh(); }
-function refresh() { ({ overview: loadStats, vouchers: loadVouchers, accounts: loadAccounts, awards: loadAwards, settings: loadCfg })[tab](); }
+function refresh() { ({ overview: loadStats, vouchers: loadVouchers, accounts: loadAccounts, awards: loadAwards, announce: loadAnnounce, settings: loadCfg })[tab](); }
+setInterval(() => { if (token && tab === 'announce') loadAnnounce(); }, 30000);
+
+/* ---------- Thông báo chạy chữ ---------- */
+const AN_TAG = { info: '📣 THÔNG BÁO', event: '🎉 SỰ KIỆN', warn: '⚠️ CHÚ Ý' };
+const anEsc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+let anMinutes = 60;
+function anLeft(ms) { const m = Math.max(0, Math.round(ms / 60e3)); return m >= 1440 ? `${Math.floor(m / 1440)} ngày ${Math.floor(m % 1440 / 60)} giờ` : m >= 60 ? `${Math.floor(m / 60)} giờ ${m % 60} phút` : `${m} phút`; }
+function anPreview() {
+  const t = $('#anText').value.trim(), tone = $('#anTone').value;
+  $('#anCount').textContent = $('#anText').value.length + '/200 ký tự';
+  $('#anPreview').className = 'an-bar ' + tone; $('#anPreview').querySelector('.an-tag').textContent = AN_TAG[tone];
+  $('#anPrevText').textContent = t || 'Nội dung thông báo sẽ chạy ở đây…';
+}
+async function loadAnnounce() {
+  const j = await api('/api/admin/announce'), a = j.current;
+  $('#anCurrent').innerHTML = a ? `<div class="an-cur"><span class="pill on">ĐANG CHẠY</span><div class="t"><b>${AN_TAG[a.tone] || ''}</b> · ${anEsc(a.text)}<br><span class="muted">Còn ${anLeft(a.until - Date.now())} · tự ẩn lúc ${new Date(a.until).toLocaleString('vi-VN')}</span></div><button class="btn ghost sm" id="anStop">Gỡ ngay</button></div>`
+    : '<p class="muted">Hiện không có thông báo nào đang chạy.</p>';
+  $('#anLog').innerHTML = (j.log || []).map((x, i) => `<li><b>${new Date(x.at).toLocaleString('vi-VN')}</b> · ${AN_TAG[x.tone] || ''} · ${anEsc(x.text)} <span class="muted">(${anLeft(x.until - x.at)})</span> <button class="btn gray sm" data-reuse="${i}">Dùng lại</button></li>`).join('') || '<li class="muted">Chưa gửi thông báo nào.</li>';
+  const stop = $('#anStop'); if (stop) stop.onclick = async () => { if (!confirm('Gỡ thông báo này khỏi màn hình mọi người chơi?')) return; await api('/api/admin/announce', { method: 'DELETE' }); loadAnnounce(); };
+  $('#anLog').querySelectorAll('[data-reuse]').forEach(b => b.onclick = () => { const x = j.log[+b.dataset.reuse]; $('#anText').value = x.text; $('#anTone').value = x.tone || 'info'; anPreview(); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+}
+$('#anText').addEventListener('input', anPreview); $('#anTone').addEventListener('change', anPreview);
+$('#anDur').onclick = e => { const b = e.target.closest('button'); if (!b) return; document.querySelectorAll('#anDur button').forEach(x => x.classList.toggle('on', x === b)); $('#anCustomL').classList.toggle('hidden', b.dataset.m !== 'custom'); anMinutes = b.dataset.m === 'custom' ? 0 : +b.dataset.m; };
+$('#anSend').onclick = async () => {
+  const text = $('#anText').value.trim(), minutes = anMinutes || +$('#anCustom').value;
+  if (text.length < 2) return $('#anMsg').textContent = 'Nhập nội dung thông báo trước nhé.';
+  $('#anSend').disabled = true;
+  try { const j = await api('/api/admin/announce', { method: 'POST', body: { text, minutes, tone: $('#anTone').value } }); $('#anMsg').textContent = j.error ? j.error : '✅ Đã phát tới mọi người chơi.'; if (!j.error) loadAnnounce(); }
+  finally { $('#anSend').disabled = false; }
+};
 setInterval(() => { if (token && tab === 'overview') loadStats(); }, 5000);
 
 /* ---------- Tổng quan ---------- */
