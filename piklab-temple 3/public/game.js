@@ -215,9 +215,9 @@ function onMsg(m) {
       S.me = Object.assign(m.you, keep || {}); S.me.walk = 0; S.me.yaw = Math.PI;
       S.players.clear(); m.players.forEach(addPlayer);
       S.plots = m.plots; S.incense = m.incense; S.altar = m.altar; S.room = m.room; S.rooms = m.rooms;
-      S.shopUrl = m.shopUrl; setProfile(m.profile); S.serverOffset = m.serverTime - Date.now(); S.regrowMs = (m.regrowSec || 120) * 1000;
+      S.shopUrl = m.shopUrl; setProfile(m.profile); S.serverOffset = m.serverTime - Date.now(); S.regrowMs = (m.regrowSec || 120) * 1000; setAnnounce(m.announce || (S.demo ? demoAnnounce() : null));
       document.title = `${m.room.name} · ${m.templeName}`;
-      S.leaves = m.leaves || []; S.tug = m.tug || { offers: [], match: null }; S.prices = m.prices || S.prices; $('#sayInput').placeholder = `Enter -${S.prices.shout || 1} phước`; S.leafRegrowMs = (m.leafRegrowSec || 45) * 1000;
+      S.leaves = m.leaves || []; S.tug = m.tug || { offers: [], match: null }; S.co = m.co || { offers: [], games: [] }; S.coG = null; S.prices = m.prices || S.prices; $('#sayInput').placeholder = `Enter -${S.prices.shout || 1} phước`; S.leafRegrowMs = (m.leafRegrowSec || 45) * 1000;
       renderRooms(); buildAppGrid(); rebuildPlaques();
       if (m.weather) { S.weather = m.weather; showWeatherChip(); }
       S.briefs = m.briefs || [];
@@ -259,7 +259,7 @@ function onMsg(m) {
     case 'bellNo': S.busy = false; clearTimeout(S.bellWaitT); mgClose(); toast(m.msg); break;
     case 'bellWait': S.busy = false; clearTimeout(S.bellWaitT); bellReady(m.msg); break;
     case 'bellResult': setProfile(m.profile); bellResult(m); break;
-    case 'pose': { const p = S.me && m.id === S.me.id ? S.me : S.players.get(m.id); if (p) { p.pose = m.pose; p.seat = m.seat; if (m.x !== undefined && p !== S.me) { p.x = p.tx = m.x; p.y = p.ty = m.y; } if (m.pose === 'sit') p.yaw = Math.PI; if (m.pose === 'fish') p.yaw = 0; } break; }
+    case 'pose': { const p = S.me && m.id === S.me.id ? S.me : S.players.get(m.id); if (p) { p.pose = m.pose; p.seat = m.seat; if (m.x !== undefined && (p !== S.me || m.yaw !== undefined)) { p.x = p.tx = m.x; p.y = p.ty = m.y; } if (m.pose === 'sit') p.yaw = m.yaw !== undefined ? m.yaw : Math.PI; if (m.pose === 'fish') p.yaw = 0; } break; }
     case 'stink': { if (m.ms) S.stink.set(m.id, performance.now() + m.ms); else S.stink.delete(m.id); if (m.plot !== undefined) S.poopFx.push({ plot: m.plot, t: performance.now() }); break; }
     case 'briefs': S.briefs = m.briefs || []; break;
     case 'cauBite': setProfile(m.profile); cauBite(m); break;
@@ -287,6 +287,9 @@ function onMsg(m) {
     case 'leaf': S.leaves[m.leaf.id] = m.leaf; if (m.leaf.state === 'swept') { const d = L.leaves[m.leaf.id]; for (let i = 0; i < 14; i++) S.particles.push({ x: d.x * K + (Math.random() - .5) * .4, y: .1, z: d.y * K + (Math.random() - .5) * .3, vx: (Math.random() - .5) * 2, vy: 1 + Math.random() * 1.5, vz: (Math.random() - .5) * 1.5, life: 1.2, age: 0, kind: 'spark', c: ['#c9a43a', '#b5832e', '#8fa64a'][i % 3], r: 3 }); if (m.by !== S.me.id) sfx.sweep(); } break;
     case 'fortune': S.busy = false; setProfile(m.profile); openFortuneBoard(m.no); break;
     case 'tired': S.busy = false; clearTimeout(S.bellWaitT); if (S.mg === 'bell') mgClose(); setProfile(m.profile); showTired(); break;
+    case 'announce': if (m.serverTime) S.serverOffset = m.serverTime - Date.now(); setAnnounce(m.a, true); break;
+    case 'coState': S.co = m.co; if (S.xOpen === 'co' && !S.coG) coRenderLobby(); break;
+    case 'coGame': coOnGame(m.g); break;
     case 'tugState': S.tug = m.tug; if (m.serverTime) S.serverOffset = m.serverTime - Date.now(); onTugState(); break;
     case 'tugPos': if (S.tug && S.tug.match) { S.tug.match.pos = m.pos; S.tug.match.ca = m.ca; S.tug.match.cb = m.cb; } break;
     case 'tugEnd': onTugEnd(m); break;
@@ -424,6 +427,7 @@ function findInteract(t) {
   if (d({ x: MK.food.x, y: MK.food.y + 40 }) < 250) return { kind: 'shop', shop: 'food', icon: '🍜', text: 'Gọi món hồi sinh lực', x: MK.food.x - 10, y: MK.food.y - 95, h: 1.7 };
   if (d({ x: MK.barber.x, y: MK.barber.y + 50 }) < 160) return { kind: 'shop', shop: 'hair', icon: '✂️', text: 'Cắt tóc / cạo trọc', x: MK.barber.x - 60, y: MK.barber.y - 20, h: 1.6 };
   if (d({ x: MK.fortune.x, y: MK.fortune.y + 120 }) < 180) return { kind: 'fortune', icon: '🎋', text: td.accepted ? `Xem quẻ hôm nay (số ${td.accepted.no})` : td.fortuneLeft === 0 ? 'Chọn quẻ để đón nhận' : `Xin quẻ (${S.prices.fortune} phước · còn ${td.fortuneLeft !== undefined ? td.fortuneLeft : 3} lượt)`, x: MK.fortune.x, y: MK.fortune.y, h: 3.1 };
+  if (coInZone()) return { kind: 'co', icon: '♟️', text: S.coG && !S.coG.end ? 'Mở bàn cờ đang đánh' : 'Đình Cờ: thách đấu', x: L.market.co.x, y: L.market.co.y - 40, h: 2.4 };
   if (inTugZone()) return { kind: 'tug', icon: '🪢', text: S.inMatch ? 'Đang kéo co!' : 'Sân kéo co: thách đấu / nhận kèo', x: MK.tug.x, y: MK.tug.y - 60, h: 1.4 };
   let lb = null, ld = 1e9;
   L.leaves.forEach(l => { const st = S.leaves[l.id], dd = d(l); if (st && st.state === 'full' && dd < L.leafRadius && dd < ld) { ld = dd; lb = l; } });
@@ -453,6 +457,7 @@ function doInteract() {
   } else if (it.kind === 'wait') toast(it.icon === '🎣' ? it.text : 'Luống này vừa được đào, đợi rau mọc lại hoặc tìm luống khác nhé 🌱');
   else if (it.kind === 'shop') openShop(it.shop);
   else if (it.kind === 'tug') { if (!S.inMatch) openTug(); }
+  else if (it.kind === 'co') openCo();
   else if (it.kind === 'samhoi') openSamhoi();
   else if (it.kind === 'pen') openPen();
   else if (it.kind === 'fish') openFish();
@@ -1346,7 +1351,7 @@ function drawMinimap() {
   lab(L.hall.x + L.hall.w / 2, L.hall.y + L.hall.h / 2, 'Chánh điện'); lab(L.garden.x + L.garden.w / 2, L.garden.y + L.garden.h / 2, 'Vườn rau'); lab(L.pen.x + L.pen.w / 2, L.pen.y + L.pen.h - 60, 'Thú cưng');
   lab(L.bell.x, L.bell.y - 70, 'Gác chuông'); lab(MK.fortune.x, MK.fortune.y - 70, 'Xin quẻ'); lab(L.bowl.x, L.bowl.y + 110, 'Lư hương');
   lab(MK.banyan.x, MK.banyan.y - 50, 'Cây đa'); lab((MK.hat.x + MK.cloth.x) / 2, MK.hat.y - 70, 'Hàng rong'); lab(MK.food.x, MK.food.y - 70, 'Quán ăn'); lab(MK.barber.x + 40, MK.barber.y + 80, 'Cắt tóc');
-  lab(MK.tug.x, MK.tug.y + 10, 'Kéo co'); lab(MK.thayDo.x, MK.thayDo.y + 20, 'Thầy đồ'); lab(MK.cau.x, MK.cau.y - 22, 'Câu brief'); lab(L.samhoi.x, L.samhoi.y - 40, 'Sám hối'); lab(L.wharf.x + 300, L.river.y0 + 120, 'Sông · phóng sinh');
+  lab(MK.tug.x, MK.tug.y + 10, 'Kéo co'); lab(MK.co.x, MK.co.y + 10, 'Đình cờ'); lab(MK.thayDo.x, MK.thayDo.y + 20, 'Thầy đồ'); lab(MK.cau.x, MK.cau.y - 22, 'Câu brief'); lab(L.samhoi.x, L.samhoi.y - 40, 'Sám hối'); lab(L.wharf.x + 300, L.river.y0 + 120, 'Sông · phóng sinh');
   mctx.fillStyle = '#fff'; for (const p of S.players.values()) { mctx.beginPath(); mctx.arc(p.x * sx, p.y * sy, 2.2, 0, 7); mctx.fill(); }
   if (S.me) { mctx.fillStyle = '#ffcf5a'; mctx.strokeStyle = '#3a1d08'; mctx.lineWidth = 1.5; mctx.beginPath(); mctx.arc(S.me.x * sx, S.me.y * sy, 4.5, 0, 7); mctx.fill(); mctx.stroke(); }
 }
@@ -1436,6 +1441,186 @@ const updSound = () => { $('#soundBtn').textContent = S.sound ? '🔔' : '🔕';
 $('#soundBtn').onclick = () => { S.sound = !S.sound; sset('pk_sound', S.sound ? '1' : '0'); updSound(); if (S.sound) sfx.soft(); }; updSound();
 document.querySelectorAll('.emote').forEach(b => b.onclick = () => send({ t: 'emote', e: b.dataset.e }));
 
+/* ---------------- Đình Cờ: cờ vua / cờ caro cược phước ---------------- */
+const CO_REASON = { mate: 'Chiếu hết!', stalemate: 'Hết nước đi — hoà', material: 'Không đủ quân chiếu hết — hoà', fifty: 'Luật 50 nước — hoà', agree: 'Hai bên đồng ý hoà', five: 'Đủ 5 quân liền!', full: 'Kín bàn — hoà', time: 'Hết giờ', resign: 'Đầu hàng', leave: 'Rời ván giữa chừng' };
+const CO_GLYPH = { K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞', P: '♟' }, CO_GLYPH_W = { K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘' };   // bộ viền (♔…) dùng cho biểu tượng quân Trắng trong chữ
+let coGame = 'chess';
+function coInZone() { const c = L.market.co; return S.me && Math.abs(S.me.x - c.x) < c.w / 2 + 60 && Math.abs(S.me.y - c.y) < c.h / 2 + 60; }
+function openCo() { if (S.coG && !S.coG.end) coRenderGame(); else { S.coG = null; coRenderLobby(); } }
+function coRenderLobby() {
+  const st = S.co || { offers: [], games: [] }, p = S.profile || { phuoc: 0 }, mine = st.offers.find(o => o.id === S.me.id), others = st.offers.filter(o => o.id !== S.me.id);
+  const card = (id, ic, name, sub, note) => `<button class="co-pick ${coGame === id ? 'sel' : ''}" data-game="${id}"><span class="co-ic">${ic}</span><b>${name}</b><small>${sub}</small><small class="muted">${note}</small></button>`;
+  xShow('co', `<button class="x" data-close>✕</button><div class="x-head"><div><h2>♟️ Đình Cờ</h2><p class="muted">Thách đấu cờ vua hoặc cờ caro, ăn phước của nhau. Thắng nhận cả phần cược, hoà thì hoàn lại. Mỗi ván tốn ${RU.CO.cost} sinh lực.</p></div></div>
+    <div class="co-lobby"><div>
+      <label>Chọn môn cờ</label>
+      <div class="co-picks">${card('chess', '♞', 'Cờ vua', `${RU.CO.clock.chess / 60e3} phút mỗi bên`, 'Đủ luật: nhập thành, bắt tốt qua đường, phong cấp')}${card('caro', '<i class="cx">✕</i><i class="co">◯</i>', 'Cờ caro 20×20', `${RU.CO.clock.caro / 60e3} phút mỗi bên`, '5 quân liền là thắng · bị chặn 2 đầu không tính')}</div>
+      ${mine ? `<label>Kèo của bạn</label><div class="tug-offer"><span>${mine.game === 'chess' ? '♞' : '✕◯'} Đang chờ người nhận kèo <b>${RU.CO.names[mine.game]}</b> · <b>${mine.bet}</b> phước…</span><button class="mini-btn" data-cocancel="1">Huỷ</button></div>`
+        : `<label>Ra kèo ${RU.CO.names[coGame].toLowerCase()} · bạn có ${p.phuoc} phước</label><div class="bets">${RU.CO.bets.map(b => `<button data-cobet="${b}" ${p.phuoc < b ? 'disabled' : ''}>${b} 🍀</button>`).join('')}</div>`}
+      ${S.demo ? '<p class="muted small">Bản demo: một bạn đồng tu (bot) sẽ nhận kèo sau vài giây.</p>' : ''}
+    </div><div>
+      <label>Kèo đang chờ</label>${others.length ? others.map(o => `<div class="tug-offer"><span>${o.game === 'chess' ? '♞' : '✕◯'} <b>${esc(o.name)}</b> · ${RU.CO.names[o.game]} · cược <b>${o.bet}</b> phước</span><button class="mini-btn" data-coaccept="${o.id}" ${p.phuoc < o.bet ? 'disabled title="Không đủ phước"' : ''}>Nhận kèo</button></div>`).join('') : '<p class="muted small">Chưa có ai ra kèo. Ra kèo trước đi!</p>'}
+      <label>Đang đấu</label>${st.games.length ? st.games.map(g => `<div class="co-live">${g.game === 'chess' ? '♞' : '✕◯'} <b>${esc(g.xName)}</b> ⚔️ <b>${esc(g.oName)}</b> <span class="muted">· ${RU.CO.names[g.game]} · ${g.bet} phước · bàn ${g.table + 1}</span></div>`).join('') : '<p class="muted small">Các bàn đang trống.</p>'}
+    </div></div>`);
+}
+$('#xCard').addEventListener('click', e => {
+  if (S.xOpen !== 'co') return;
+  const b = e.target.closest('button'); if (!b || b.disabled) return;
+  if (b.dataset.game) { coGame = b.dataset.game; sfx.pop(); coRenderLobby(); }
+  else if (b.dataset.cobet) send({ t: 'coOffer', game: coGame, bet: +b.dataset.cobet });
+  else if (b.dataset.coaccept) send({ t: 'coAccept', id: b.dataset.coaccept });
+  else if (b.dataset.cocancel) send({ t: 'coCancel' });
+  else if (b.id === 'coResign') { if (confirm('Đầu hàng ván này? Bạn sẽ mất phước đã cược.')) send({ t: 'coResign' }); }
+  else if (b.id === 'coDrawBtn') send({ t: 'coDraw' });
+  else if (b.id === 'coBack') { S.coG = null; coRenderLobby(); }
+  else if (b.dataset.promo) { const m = S.coPromo; S.coPromo = null; $('#coPromo').classList.add('hidden'); if (m) coSendMove({ from: m.from, to: m.to, promo: b.dataset.promo }); }
+});
+const coMe = g => g.x === S.me.id ? 'x' : 'o';
+const coClock = (g, id) => Math.max(0, g.clock[id] - (g.turn === id && !g.end ? Date.now() + S.serverOffset - g.turnStart : 0));
+const coFmt = ms => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+function coOnGame(g) {
+  const fresh = !S.coG || S.coG.id !== g.id, wasMyTurn = S.coG && S.coG.turn === S.me.id;
+  if (g.serverTime) S.serverOffset = g.serverTime - Date.now();
+  if (S.coG && !fresh && !g.end && S.coG.s.moves !== g.s.moves) sfx.tick();
+  S.coG = g; S.coSel = null;
+  if (fresh && !g.end) {                                // ván mới: ngồi vào bàn, mở bàn cờ
+    const t = L.coTables[g.table], st = t && t.seats[g.x === S.me.id ? 0 : 1];
+    if (st) { S.me.x = st.x; S.me.y = st.y; S.me.yaw = st.yaw; S.me.pose = 'sit'; S.target = null; }
+    sfx.bell(); coRenderGame(); return;
+  }
+  if (g.end) { const won = g.end.winner === S.me.id; if (g.end.winner) won ? sfx.win() : sfx.soft(); else sfx.pop(); }
+  if (S.xOpen === 'co') coRenderGame();
+  else if (!g.end && g.turn === S.me.id && !wasMyTurn) toast('♟️ Tới lượt bạn đi cờ — bấm E ở Đình Cờ để mở bàn');
+  else if (g.end) toast(g.end.winner === S.me.id ? `🏆 Bạn thắng ván ${RU.CO.names[g.game].toLowerCase()}!` : g.end.winner ? `Bạn thua ván ${RU.CO.names[g.game].toLowerCase()}` : 'Ván cờ hoà');
+}
+function coRenderGame() {
+  const g = S.coG; if (!g) return coRenderLobby();
+  const me = S.me.id, opp = g.x === me ? g.o : g.x, side = coMe(g), chess = g.game === 'chess';
+  const mark = id => chess ? (id === g.x ? '<i class="pc">♔\uFE0E</i>' : '<i class="pc">♚\uFE0E</i>') : (id === g.x ? '<i class="cx">✕</i>' : '<i class="co">◯</i>');
+  let res = '';
+  if (g.end) {
+    const w = g.end.winner, txt = !w ? `🤝 Hoà · hoàn lại ${g.bet} phước` : w === me ? `🏆 Bạn thắng · nhận ${g.bet * 2} phước` : `😔 Bạn thua · mất ${g.bet} phước`;
+    res = `<div class="co-result ${!w ? 'draw' : w === me ? 'win' : 'lose'}"><b>${txt}</b><small>${CO_REASON[g.end.reason] || ''}${g.end.reason === 'time' || g.end.reason === 'resign' || g.end.reason === 'leave' ? (w === me ? ' — đối thủ' : w ? ' — bạn' : '') : ''}</small><button class="primary" id="coBack">Về sảnh Đình Cờ</button></div>`;
+  }
+  const oppDraw = g.drawBy && g.drawBy !== me, myDraw = g.drawBy === me, prevBox = document.querySelector('.co-board'), keep = prevBox && S.coBoardId === g.id ? [prevBox.scrollLeft, prevBox.scrollTop] : null;
+  xShow('co', `<button class="x" data-close>✕</button><div class="co-play">
+    <div class="co-board ${chess ? 'chess' : 'caro'}"><canvas id="coCv"></canvas>
+      <div id="coPromo" class="co-promo hidden"><span>Phong cấp thành</span>${'QRBN'.split('').map(k => `<button data-promo="${k}"><i class="pc">${(side === 'x' ? CO_GLYPH_W : CO_GLYPH)[k]}\uFE0E</i></button>`).join('')}</div></div>
+    <div class="co-side">
+      <div class="co-meta">${chess ? '♞ Cờ vua' : '✕◯ Cờ caro 20×20'} · cược <b>${g.bet}</b> phước · bàn ${g.table + 1}</div>
+      <div class="co-player" id="coPO">${mark(opp)}<b>${esc(g.names[opp] || '?')}</b><span class="co-clock" id="coClkO"></span></div>
+      <div class="co-status" id="coStatus"></div>
+      <div class="co-player me" id="coPM">${mark(me)}<b>${esc(g.names[me] || 'Bạn')} <small>(bạn)</small></b><span class="co-clock" id="coClkM"></span></div>
+      ${res || `${oppDraw ? '<div class="co-ask">🤝 Đối thủ xin hoà</div>' : ''}<div class="co-actions"><button class="primary ghost" id="coDrawBtn" ${myDraw ? 'disabled' : ''}>${oppDraw ? '✅ Đồng ý hoà' : myDraw ? 'Đã xin hoà…' : '🤝 Xin hoà'}</button><button class="primary ghost" id="coResign">🏳️ Đầu hàng</button></div>
+      <p class="muted small">${chess ? 'Bấm quân của bạn rồi bấm ô muốn đi. Chấm tròn là nước đi hợp lệ.' : 'Bấm vào ô trống để đánh. 5 quân liền ngang, dọc hoặc chéo là thắng — bị chặn cả hai đầu thì không tính.'} Hết giờ, đầu hàng hoặc rời đi là thua.</p>`}
+    </div></div>`);
+  const cv = $('#coCv');
+  cv.onpointerdown = e => coClick(e); cv.onpointermove = e => { if (!chess) { S.coHover = coCell(e); coDraw(); } }; cv.onpointerleave = () => { S.coHover = -1; coDraw(); };
+  coDraw(); coTick();
+  // bàn caro rộng hơn màn hình điện thoại: giữ nguyên chỗ đang cuộn giữa các nước, ván mới thì căn giữa bàn
+  const box = cv.parentElement; S.coBoardId = g.id;
+  if (keep) { box.scrollLeft = keep[0]; box.scrollTop = keep[1]; } else { box.scrollLeft = (box.scrollWidth - box.clientWidth) / 2; box.scrollTop = (box.scrollHeight - box.clientHeight) / 2; }
+  clearInterval(S.coT); S.coT = setInterval(() => { if (S.xOpen !== 'co' || !S.coG) return clearInterval(S.coT); coTick(); }, 250);
+}
+function coTick() {
+  const g = S.coG; if (!g || !$('#coClkM')) return;
+  const me = S.me.id, opp = g.x === me ? g.o : g.x, cm = coClock(g, me), co = coClock(g, opp);
+  $('#coClkM').textContent = coFmt(cm); $('#coClkO').textContent = coFmt(co);
+  $('#coClkM').classList.toggle('low', cm < 30e3); $('#coClkO').classList.toggle('low', co < 30e3);
+  $('#coPM').classList.toggle('turn', !g.end && g.turn === me); $('#coPO').classList.toggle('turn', !g.end && g.turn === opp);
+  const chk = g.game === 'chess' && !g.end && RU.CHESS.inCheck(g.s);
+  $('#coStatus').innerHTML = g.end ? '' : g.turn === me ? `<b>Lượt của bạn</b>${chk ? ' · <em>Bạn đang bị chiếu!</em>' : ''}` : `Đối thủ đang nghĩ…${chk ? ' · <em>Chiếu!</em>' : ''}`;
+}
+function coSize(cv) {                                     // canvas vuông, nét theo màn hình; caro trên điện thoại: ô tối thiểu 22px, cuộn ngang
+  const g = S.coG, box = cv.parentElement, w0 = Math.min(560, box.clientWidth || 480), n = g.game === 'chess' ? 8 : RU.CARO.size;
+  const w = g.game === 'caro' ? Math.max(w0, n * 22) : w0, dpr = Math.min(2, window.devicePixelRatio || 1);
+  if (cv.width !== Math.round(w * dpr)) { cv.width = cv.height = Math.round(w * dpr); cv.style.width = cv.style.height = w + 'px'; }
+  return { w, n, cell: w / n, dpr };
+}
+function coCell(e) {
+  const g = S.coG, cv = $('#coCv'), r = cv.getBoundingClientRect(), n = g.game === 'chess' ? 8 : RU.CARO.size;
+  let c = Math.floor((e.clientX - r.left) / r.width * n), rw = Math.floor((e.clientY - r.top) / r.height * n);
+  if (c < 0 || rw < 0 || c >= n || rw >= n) return -1;
+  if (g.game === 'chess' && coMe(g) === 'o') { c = 7 - c; rw = 7 - rw; }        // quân Đen: lật bàn
+  return rw * n + c;
+}
+function coSendMove(mv) {
+  const g = S.coG; send({ t: 'coMove', mv });
+  // hiện ngay nước vừa đi (server gửi lại thế cờ chuẩn ngay sau đó)
+  if (g.game === 'chess') { const m = RU.CHESS.find(g.s, mv.from, mv.to, mv.promo); if (m) { g.s = RU.CHESS.apply(g.s, m); g.turn = g.turn === g.x ? g.o : g.x; } }
+  else { const b = g.s.b.slice(); b[mv.i] = g.s.turn; g.s = Object.assign({}, g.s, { b, turn: 3 - g.s.turn, last: mv.i }); g.turn = g.turn === g.x ? g.o : g.x; }
+  S.coSel = null; sfx.tick(); coDraw(); coTick();
+}
+function coClick(e) {
+  const g = S.coG; if (!g || g.end || g.turn !== S.me.id || S.coPromo) return;
+  const i = coCell(e); if (i < 0) return;
+  if (g.game === 'caro') { if (!g.s.b[i]) coSendMove({ i }); return; }
+  const mine = coMe(g) === 'x' ? 'w' : 'b', p = g.s.b[i];
+  if (S.coSel !== null && S.coSel !== undefined) {
+    const ms = RU.CHESS.legal(g.s).filter(m => m.from === S.coSel && m.to === i);
+    if (ms.length) {
+      if (ms[0].promo) { S.coPromo = { from: S.coSel, to: i }; $('#coPromo').classList.remove('hidden'); return; }
+      return coSendMove({ from: S.coSel, to: i });
+    }
+  }
+  S.coSel = p && p[0] === mine ? (S.coSel === i ? null : i) : null; sfx.pop(); coDraw();
+}
+function coDraw() {
+  const g = S.coG, cv = $('#coCv'); if (!g || !cv) return;
+  const { w, n, cell, dpr } = coSize(cv), c = cv.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, w);
+  if (g.game === 'chess') {
+    const flip = coMe(g) === 'o', pos = i => { let r = i >> 3, cl = i & 7; if (flip) { r = 7 - r; cl = 7 - cl; } return [cl * cell, r * cell]; };
+    for (let i = 0; i < 64; i++) { const [x, y] = pos(i); c.fillStyle = ((i >> 3) + i) % 2 ? '#b07a4c' : '#f2e2c2'; c.fillRect(x, y, cell, cell); }
+    const tint = (i, col) => { const [x, y] = pos(i); c.fillStyle = col; c.fillRect(x, y, cell, cell); };
+    if (g.s.last) { tint(g.s.last.from, 'rgba(232,182,90,.45)'); tint(g.s.last.to, 'rgba(232,182,90,.55)'); }
+    if (RU.CHESS.inCheck(g.s)) { const k = g.s.b.indexOf(g.s.turn + 'K'), [x, y] = pos(k), gr = c.createRadialGradient(x + cell / 2, y + cell / 2, 2, x + cell / 2, y + cell / 2, cell * .7); gr.addColorStop(0, 'rgba(220,40,30,.9)'); gr.addColorStop(1, 'rgba(220,40,30,0)'); c.fillStyle = gr; c.fillRect(x, y, cell, cell); }
+    const sel = S.coSel, targets = sel !== null && sel !== undefined ? RU.CHESS.legal(g.s).filter(m => m.from === sel).map(m => m.to) : [];
+    if (sel !== null && sel !== undefined) tint(sel, 'rgba(90,160,90,.55)');
+    c.font = `600 ${cell * .11 + 5}px "Be Vietnam Pro", sans-serif`; c.textBaseline = 'alphabetic';
+    for (let k = 0; k < 8; k++) { const fl = flip ? 7 - k : k; c.fillStyle = k % 2 ? '#f2e2c2' : '#b07a4c'; c.textAlign = 'left'; c.fillText(String(8 - fl), 3, k * cell + cell * .26); c.fillStyle = (k + 1) % 2 ? '#f2e2c2' : '#b07a4c'; c.textAlign = 'right'; c.fillText('abcdefgh'[fl], (k + 1) * cell - 3, w - 4); }
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.font = `${cell * .78}px "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", serif`; c.lineJoin = 'round';
+    for (let i = 0; i < 64; i++) { const p = g.s.b[i]; if (!p) continue; const [x, y] = pos(i), ch = CO_GLYPH[p[1]] + '︎';
+      c.lineWidth = cell * .07; c.strokeStyle = p[0] === 'w' ? '#3a2614' : '#f6e9cf'; c.strokeText(ch, x + cell / 2, y + cell * .54); c.fillStyle = p[0] === 'w' ? '#fffaf0' : '#2a1d12'; c.fillText(ch, x + cell / 2, y + cell * .54); }
+    for (const t of targets) { const [x, y] = pos(t); c.fillStyle = 'rgba(40,90,40,.45)'; c.beginPath(); if (g.s.b[t]) { c.lineWidth = cell * .08; c.strokeStyle = 'rgba(40,90,40,.6)'; c.arc(x + cell / 2, y + cell / 2, cell * .44, 0, 7); c.stroke(); } else { c.arc(x + cell / 2, y + cell / 2, cell * .15, 0, 7); c.fill(); } }
+  } else {
+    c.fillStyle = '#fbf6ea'; c.fillRect(0, 0, w, w); c.strokeStyle = '#c3d3ea'; c.lineWidth = 1;
+    for (let k = 0; k <= n; k++) { const v = Math.round(k * cell) + .5; c.beginPath(); c.moveTo(v, 0); c.lineTo(v, w); c.moveTo(0, v); c.lineTo(w, v); c.stroke(); }
+    const b = g.s.b, xy = i => [(i % n) * cell, Math.floor(i / n) * cell];
+    if (g.s.last >= 0) { const [x, y] = xy(g.s.last); c.fillStyle = 'rgba(232,182,90,.35)'; c.fillRect(x + 1, y + 1, cell - 1, cell - 1); }
+    const X = (x, y, a) => { c.globalAlpha = a; c.strokeStyle = '#c0392b'; c.lineWidth = Math.max(2, cell * .12); c.lineCap = 'round'; const m = cell * .24; c.beginPath(); c.moveTo(x + m, y + m); c.lineTo(x + cell - m, y + cell - m); c.moveTo(x + cell - m, y + m); c.lineTo(x + m, y + cell - m); c.stroke(); c.globalAlpha = 1; };
+    const O = (x, y, a) => { c.globalAlpha = a; c.strokeStyle = '#2f6fb3'; c.lineWidth = Math.max(2, cell * .11); c.beginPath(); c.arc(x + cell / 2, y + cell / 2, cell * .3, 0, 7); c.stroke(); c.globalAlpha = 1; };
+    for (let i = 0; i < b.length; i++) if (b[i]) { const [x, y] = xy(i); (b[i] === 1 ? X : O)(x, y, 1); }
+    if (!g.end && g.turn === S.me.id && S.coHover >= 0 && !b[S.coHover]) { const [x, y] = xy(S.coHover); (coMe(g) === 'x' ? X : O)(x, y, .3); }
+    if (g.s.line) { const pts = g.s.line.map(xy).sort((a, b2) => a[0] - b2[0] || a[1] - b2[1]), a = pts[0], z = pts[pts.length - 1]; c.strokeStyle = 'rgba(232,182,90,.85)'; c.lineWidth = cell * .3; c.lineCap = 'round'; c.beginPath(); c.moveTo(a[0] + cell / 2, a[1] + cell / 2); c.lineTo(z[0] + cell / 2, z[1] + cell / 2); c.stroke(); for (const i of g.s.line) { const [x, y] = xy(i); X(x, y, 1); } }
+  }
+}
+
+/* ---------------- Thông báo chạy chữ (admin gửi) ---------------- */
+const AN_TAG = { info: '📣 THÔNG BÁO', event: '🎉 SỰ KIỆN', warn: '⚠️ CHÚ Ý' };
+function setAnnounce(a, fresh) {
+  const el = $('#announce'); clearTimeout(S.anT); S.announce = a || null;
+  const left = a ? a.until - (Date.now() + S.serverOffset) : 0;
+  let hidden = ''; try { hidden = sessionStorage.getItem('pk_an_hide') || ''; } catch (e) {}
+  if (!a || left <= 0 || hidden === a.id) { el.classList.add('hidden'); document.body.classList.remove('has-announce'); layoutAnnounce(); return; }
+  el.className = 'announce ' + (a.tone || 'info'); $('#anTag').textContent = AN_TAG[a.tone] || AN_TAG.info;
+  const run = $('#anRun'); run.textContent = a.text; document.body.classList.add('has-announce'); layoutAnnounce();
+  // tốc độ chạy cố định ~80px/giây dù câu dài hay ngắn
+  requestAnimationFrame(() => { const w = run.scrollWidth || 600; run.style.animationDuration = Math.max(8, w / 80) + 's'; run.style.animationName = 'none'; void run.offsetWidth; run.style.animationName = ''; });
+  S.anT = setTimeout(() => setAnnounce(null), Math.min(left, 2 ** 31 - 1));
+  if (fresh) { sfx.pop(); el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 900); }
+}
+$('#anX').onclick = () => { if (S.announce) try { sessionStorage.setItem('pk_an_hide', S.announce.id); } catch (e) {} setAnnounce(S.announce); };
+// Đặt thanh thông báo ngay dưới cụm nút trên cùng (trên điện thoại cụm nút xuống nhiều hàng), dời dòng nhắc (#ticker) xuống dưới thanh
+function layoutAnnounce() {
+  const el = $('#announce'), tk = $('#ticker');
+  if (el.classList.contains('hidden')) { tk.style.top = ''; return; }
+  const bot = ['.hud-tl', '.hud-tr', '#hint'].map(s => document.querySelector(s)).filter(x => x && x.getClientRects().length).reduce((m, x) => Math.max(m, x.getBoundingClientRect().bottom), 0);
+  el.style.top = Math.round(bot + 8) + 'px'; tk.style.top = Math.round(bot + 8 + el.offsetHeight + 8) + 'px';
+}
+addEventListener('resize', layoutAnnounce);
+if (window.ResizeObserver) { const ro = new ResizeObserver(() => layoutAnnounce()); ['.hud-tl', '.hud-tr'].forEach(s => { const x = document.querySelector(s); if (x) ro.observe(x); }); }
+function demoAnnounce() { try { return JSON.parse(sget('pk_demo_announce') || 'null'); } catch (e) { return null; } }
+
 /* ---------------- Bảng cài đặt DEMO ---------------- */
 function shrinkImage(file, cb) {
   const fr = new FileReader();
@@ -1453,11 +1638,18 @@ function openDemoPanel() {
     <label>Thời tiết (bản thật: admin chọn trong trang quản trị)</label>
     <div class="icon-row"><select id="dWxCity">${RU.CITIES.map(c => `<option value="${c.id}" ${S.net.local.config.wx().city === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}</select>
     <select id="dWxMode"><option value="auto">Theo dự báo thật</option>${Object.entries(RU.WEATHER).map(([k, v]) => `<option value="${k}" ${S.net.local.config.wx().mode === 'manual' && S.net.local.config.wx().manual === k ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('')}</select></div>
+    <label>📣 Thử thông báo chạy chữ (bản thật: admin gửi trong tab Thông báo)</label>
+    <div class="icon-row"><input id="dAnText" maxlength="200" placeholder="VD: 🎉 Tối nay 20h đào rau x2 tỉ lệ voucher!" style="flex:1"></div>
+    <div class="icon-row"><select id="dAnTone"><option value="info">📣 Thông báo</option><option value="event">🎉 Sự kiện</option><option value="warn">⚠️ Cảnh báo</option></select><select id="dAnMin"><option value="1">1 phút</option><option value="5" selected>5 phút</option><option value="60">1 giờ</option></select><button class="primary" id="dAnSend" style="width:auto;padding:8px 14px">Phát</button><button class="primary ghost" id="dAnStop" style="width:auto;padding:8px 14px">Gỡ</button></div>
     <button class="primary ghost" id="resetDigs">Hồi lại lượt đào, chuông, quẻ hôm nay</button>
     <p class="muted small">Bản đầy đủ (chạy server) có trang quản trị /admin để tạo mã thật, đặt tỉ lệ và xem thống kê truy cập.</p>`;
   $('#demoModal').classList.remove('hidden');
 }
 $('#demoBtn').onclick = openDemoPanel;
+$('#demoBody').addEventListener('click', e => {
+  if (e.target.id === 'dAnSend') { const text = $('#dAnText').value.trim().replace(/[<>]/g, ''); if (text.length < 2) return toast('Nhập nội dung thông báo trước nhé'); const a = { id: 'd' + Date.now(), text, tone: $('#dAnTone').value, until: Date.now() + +$('#dAnMin').value * 60e3 }; sset('pk_demo_announce', JSON.stringify(a)); setAnnounce(a, true); toast('Đã phát thông báo thử 📣'); }
+  if (e.target.id === 'dAnStop') { sset('pk_demo_announce', ''); setAnnounce(null); }
+});
 $('#demoBody').addEventListener('change', e => {
   const cfg = S.net.local.config;
   if (e.target.dataset.i !== undefined && e.target.files[0]) shrinkImage(e.target.files[0], url => { cfg.altar[+e.target.dataset.i].image = url; cfg.save(); S.altar = cfg.altar; rebuildPlaques(); buildAppGrid(); openDemoPanel(); toast('Đã đặt icon lên ban thờ 🪔'); });
