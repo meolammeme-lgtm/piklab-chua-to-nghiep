@@ -454,3 +454,15 @@ body.noblur .modal-wrap { backdrop-filter: none; -webkit-backdrop-filter: none; 
   .co-board { margin: 8px 6px; max-width: calc(100vw - 72px); }
 }
 .offer-exp { display: block; font-size: 11.5px; color: #8b7356; margin-top: 2px; font-weight: 500; }
+
+/* Nút hành động: nút đang bật (ngồi, ngủ gật, bảng mở) sáng viền vàng; bảng "Hành động khác" bật lên phía trên */
+.emote.on { box-shadow: inset 0 0 0 2px #e8b65a, 0 0 12px rgba(232,182,90,.45); background: rgba(140,43,30,.75); }
+.emote-more { position: absolute; left: 0; bottom: calc(100% + 8px); width: 300px; padding: 10px; border-radius: 16px; color: #fff4dd; }
+.emote-more > b { display: block; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: #e8c878; margin: 0 2px 8px; }
+.em-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.em-grid button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 12px; border: 1px solid rgba(255,220,160,.18); background: rgba(255,255,255,.07); color: #fff4dd; font: 600 11.5px "Be Vietnam Pro", sans-serif; cursor: pointer; }
+.em-grid button span { font-size: 22px; line-height: 1.1; }
+.em-grid button:hover { background: rgba(255,255,255,.16); } .em-grid button:active { transform: scale(.95); }
+.em-grid button.on { box-shadow: inset 0 0 0 2px #e8b65a; }
+@media (max-width: 640px) { .emote-more { width: min(300px, calc(100vw - 24px)); } }
+.hud-bl.open { z-index: 30 !important; }   /* bảng đang mở nằm trên ô khẩu nghiệp */
