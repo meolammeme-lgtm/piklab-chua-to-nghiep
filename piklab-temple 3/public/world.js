@@ -532,6 +532,22 @@ function build(R, L) {
     hangSign('BÃI CÂU BRIEF', x - rx + .2, 1.3, z - .2, 1.1, '#23466b');   // bảng tên giữa sạp Cô Ba và ghế đầu tiên
     for (const s2 of [-1, 1]) world.add(cy(.03, .03, 1.3, 6), '#7d5c30', T(x - rx + .2 + s2 * .58, 0, z - .22)); }
 
+  // --- Đình Cờ: khung cột sơn son không mái (để thấy người chơi), đèn lồng, 4 bàn đá — 2 bàn bày cờ vua, 2 bàn trải giấy caro ---
+  { const c = MK.co, x = c.x * k, z = c.y * k, hw = c.w * k / 2 - .25, hd = c.h * k / 2 - .2;
+    for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { world.add(cy(.075, .085, 2.2, 10), '#9e2b22', T(x + sx * hw, 0, z + sz * hd)); world.add(cy(.13, .13, .12, 10), '#6b4a2a', T(x + sx * hw, 0, z + sz * hd)); }
+    for (const sz of [-1, 1]) world.add(rb(hw * 2 + .3, .14, .14, .03), '#7d2219', T(x, 2.22, z + sz * hd));
+    for (const sx of [-1, 1]) world.add(rb(.14, .14, hd * 2 + .3, .03), '#7d2219', T(x + sx * hw, 2.22, z));
+    for (let i = 0; i < 5; i++) { const lx = x - hw + .45 + i * (hw * 2 - .9) / 4; world.add(cy(.006, .006, .3, 4), '#2a2020', T(lx, 1.85, z - hd)); world.add(sp(.13, 10), '#d8452f', T(lx, 1.78, z - hd, 0, 1, 1.25, 1)); world.add(cy(.06, .06, .03, 8), '#e8b65a', T(lx, 1.62, z - hd)); }
+    hangSign('ĐÌNH CỜ', x, 2.0, z + hd + .02, 1.6, '#7a2a20');
+    for (const t of L.coTables) {
+      const tx = t.x * k, tz = t.y * k, chess = t.id < 2;
+      world.add(cy(.07, .11, .62, 10), '#9a948a', T(tx, 0, tz)); world.add(rb(.62, .07, .52, .03), '#b4ada2', T(tx, .66, tz));
+      if (chess) { world.add(rb(.44, .012, .44, .004), '#5a3a22', T(tx, .7, tz)); for (let i = 0; i < 64; i++) if (((i >> 3) + i) % 2) world.add(rb(.05, .006, .05, .001), '#efe0bf', T(tx - .175 + (i & 7) * .05, .709, tz - .175 + (i >> 3) * .05)); for (const s of [-1, 1]) for (let j = 0; j < 4; j++) world.add(cy(.014, .02, .05, 6), s < 0 ? '#f6ecd9' : '#2a1d12', T(tx + s * .17, .712, tz - .12 + j * .08)); }
+      else { world.add(rb(.46, .008, .38, .002), '#fbf6ea', T(tx, .7, tz)); for (let i = 0; i <= 8; i++) { world.add(rb(.46, .004, .004, .001), '#9db5d6', T(tx, .705, tz - .19 + i * .0475)); world.add(rb(.004, .004, .38, .001), '#9db5d6', T(tx - .23 + i * .0575, .705, tz)); } for (let i = 0; i < 6; i++) world.add(cy(.016, .016, .006, 8), i % 2 ? '#2f6fb3' : '#c0392b', T(tx - .08 + i * .03, .708, tz + (i % 3 - 1) * .045)); }
+      for (const st of t.seats) world.add(cy(.13, .15, .38, 12), '#a59d8b', T(st.x * k, 0, st.y * k));   // đôn đá
+    }
+  }
+
   // --- Sông cuối đường: mặt nước, bờ đá, lau sậy, bến gỗ, đò ---
   { const rv = L.river, z0 = rv.y0 * k, z1 = (L.H + 30) * k, zc = (z0 + z1) / 2;
     water.add(rb(WW + .6, .06, z1 - z0 + .1, .02), '#5f9fb0', T(WX, .0, zc));
