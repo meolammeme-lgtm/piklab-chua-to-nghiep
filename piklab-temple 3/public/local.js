@@ -67,7 +67,7 @@ const SHOUTS = ['Khách ơi đừng sửa nữa mà!!!', 'Ai đặt tên layer l
 const WISHES = ['Khách duyệt bản đầu tiên', 'Render không crash', 'Deadline lùi 1 tuần', 'In ra đúng màu', 'Không bị “logo to hơn”', 'File không corrupt', 'Lương về đúng hẹn', 'Font không lỗi'];
 const BOTS = [
   ['Thích Kéo Layer', '#7a5a43', 'bald'], ['Thích Căn Lề', '#6f7d8c', 'khan', 'nguthan'], ['Thích Pen Tool', '#c9902e', 'bald'],
-  ['Thích Keyframe', '#3b4f7a', 'none', 'aodai', 'long'], ['Thích Gradient', '#efe7d6', 'non', 'baba', 'braid']   // [pháp danh, màu áo, mũ, kiểu áo, kiểu tóc]
+  ['Thích Keyframe', '#3b4f7a', 'none', 'aodai', 'long'], ['Thích Gradient', '#efe7d6', 'non', 'baba', 'braid'], ['Đường Tăng', '#a8382c', 'tylu', 'trang', 'bald']   // [pháp danh, màu áo, mũ, kiểu áo, kiểu tóc]
 ];
 const MKT = L.market, GY = L.GATE_Y, AX = L.altar.x;
 const POI = {
@@ -131,7 +131,7 @@ window.LocalServer = function (deliver) {
   const look = () => { saveAccount(acc); me.color = acc.color; me.hat = acc.hat; me.hair = acc.hair; me.outfit = acc.outfit; emit({ t: 'look', id: 'me', color: acc.color, hat: acc.hat, hair: acc.hair, outfit: acc.outfit }); };
   const M = L.market;
   let incense = [], me = null;
-  const bots = BOTS.map(([name, color, hat, outfit, hair], i) => ({ id: 'bot' + i, name, color, hat: hat === 'bald' ? 'none' : hat, hair: hat === 'bald' ? 'bald' : hair || 'bun', outfit: outfit || 'trang', x: L.gate.x + (i - 2) * 70, y: 1150 - i * 40, dir: 1, moving: false, path: [], wait: 1 + i * 1.5, goal: null }));
+  const bots = BOTS.map(([name, color, hat, outfit, hair], i) => ({ id: name === RU.TANG.name ? RU.TANG.id : 'bot' + i, name, color, hat: hat === 'bald' ? 'none' : hat, hair: hat === 'bald' ? 'bald' : hair || 'bun', outfit: outfit || 'trang', x: L.gate.x + (i - 2) * 70, y: 1150 - i * 40, dir: 1, moving: false, path: [], wait: 1 + i * 1.5, goal: null }));
   const rooms = () => [{ id: 'chua-1', name: 'Chùa 1', num: 1, online: bots.length + 1, capacity: 30 }];
   const pub = b => ({ id: b.id, name: b.name, color: b.color, hat: b.hat, hair: b.hair, outfit: b.outfit, x: b.x, y: b.y, dir: b.dir, moving: b.moving, pose: b.pose || '', seat: b.seat });
   const near = (a, b, r) => Math.hypot(a.x - b.x, a.y - b.y) < r;
@@ -169,11 +169,11 @@ window.LocalServer = function (deliver) {
         if (d <= sp) { b.x = tx; b.y = ty; b.path.shift(); } else { b.x += dx / d * sp; b.y += dy / d * sp; b.dir = dx >= 0 ? 1 : -1; }
         b.moving = b.path.length > 0;
         if (!b.moving) arrive(b);
-        else if (Math.random() < .0012) emit({ t: 'say', id: b.id, text: SHOUTS[Math.random() * SHOUTS.length | 0] });   // vừa đi vừa khẩu nghiệp
+        else if (b.id === RU.TANG.id ? Math.random() < .004 : Math.random() < .0012) emit(b.id === RU.TANG.id ? { t: 'npcSay', id: b.id, text: RU.TANG_SAYS[Math.random() * RU.TANG_SAYS.length | 0] } : { t: 'say', id: b.id, text: SHOUTS[Math.random() * SHOUTS.length | 0] });   // vừa đi vừa khẩu nghiệp
         moved.push([b.id, Math.round(b.x), Math.round(b.y), b.dir, b.moving ? 1 : 0]);
       } else if (b.tugging || b.coing) { /* đang kéo co / đánh cờ */ } else if ((b.wait -= dt) <= 0) {
         if (b.pose) { b.pose = ''; b.seat = null; emit({ t: 'pose', id: b.id, pose: '' }); }
-        const kinds = ['altar', 'bowl', 'garden', 'pen', 'wander', 'bell', 'shout', 'sweep', 'eat', 'cushion', 'fortune', 'bell', 'fish', 'samhoi', 'pentool', 'cau', 'cau'];
+        const kinds = b.id === RU.TANG.id ? ['altar', 'bowl', 'garden', 'pen', 'wander', 'bell', 'cushion', 'fortune', 'samhoi', 'wander'] : ['altar', 'bowl', 'garden', 'pen', 'wander', 'bell', 'shout', 'sweep', 'eat', 'cushion', 'fortune', 'bell', 'fish', 'samhoi', 'pentool', 'cau', 'cau'];
         const kind = kinds[Math.random() * kinds.length | 0], list = POI[kind], tgt = list[Math.random() * list.length | 0];
         b.goal = kind; b.path = route(b, kind, tgt);
       }
@@ -221,7 +221,7 @@ window.LocalServer = function (deliver) {
   }
   function botAccept() {
     const o = tug.offers.find(x => x.id === 'me'); if (!o || tug.match) return;
-    const bot = bots.find(x => !x.tugging) || bots[0];
+    const bot = bots.find(x => !x.tugging && !x.coing && x.id !== RU.TANG.id) || bots[0];
     if (!RU.useStamina(prof, RU.COST.tug, Date.now())) { tug.offers = []; emit({ t: 'tugState', tug: tugState() }); return tired(); }
     prof.phuoc -= o.bet; tug.offers = [];
     bot.tugging = true; bot.path = []; bot.moving = false; bot.x = M.tug.x + 150; bot.y = M.tug.y;
@@ -237,34 +237,9 @@ window.LocalServer = function (deliver) {
   const coState = () => ({ offers: co.offers.map(o => ({ id: o.id, name: o.name, game: o.game, bet: o.bet })), games: co.games.map(g => ({ id: g.id, game: g.game, bet: g.bet, xName: g.names[g.x], oName: g.names[g.o], table: g.table })) });
   const coOut = g => ({ id: g.id, game: g.game, bet: g.bet, table: g.table, x: g.x, o: g.o, names: g.names, s: g.s, clock: g.clock, turnStart: g.turnStart, turn: RU.coTurnId(g), drawBy: g.drawBy, serverTime: Date.now(), end: g.end || null });
   const coMine = () => co.games.find(g => g.x === 'me' || g.o === 'me');
-  const PV = { P: 1, N: 3, B: 3.2, R: 5, Q: 9, K: 0 };
-  function chessBot(s) {                               // bot cờ vua 1 nước: ưu tiên chiếu hết, ăn quân lời, tránh để quân bị ăn
-    let best = null, bs = -1e9;
-    for (const m of RU.CHESS.legal(s)) {
-      const n = RU.CHESS.apply(s, m), st = RU.CHESS.status(n), moved = m.promo || s.b[m.from][1];
-      let sc = (n.cap ? PV[n.cap[1]] : 0) + (m.promo ? 8 : 0) + Math.random() * .4;
-      if (st === 'mate') sc += 1000; else if (st === 'stalemate') sc -= 50; else if (st === 'check') sc += .3;
-      if (RU.CHESS.attacked(n.b, m.to, n.turn)) sc -= PV[moved] * .9;
-      if (sc > bs) { bs = sc; best = m; }
-    }
-    return best && { from: best.from, to: best.to, promo: best.promo };
-  }
-  function caroBot(b, p) {                             // bot caro: chấm điểm từng ô theo thế công (của mình) và thế thủ (chặn đối thủ)
-    const N = RU.CARO.size, q = 3 - p, cand = [];
-    for (let i = 0; i < b.length; i++) { if (b[i]) continue; const x = i % N, y = i / N | 0; let near = false; for (let dy = -2; dy <= 2 && !near; dy++) for (let dx = -2; dx <= 2; dx++) { const xx = x + dx, yy = y + dy; if (xx >= 0 && yy >= 0 && xx < N && yy < N && b[yy * N + xx]) { near = true; break; } } if (near) cand.push(i); }
-    if (!cand.length) return { i: (N / 2 | 0) * N + (N / 2 | 0) };
-    const lineScore = (i, who) => { let t = 0; const x = i % N, y = i / N | 0;
-      for (const [dx, dy] of [[1, 0], [0, 1], [1, 1], [1, -1]]) { let n = 1, open = 0;
-        for (const s of [1, -1]) { let k = 1; for (; ; k++) { const xx = x + dx * k * s, yy = y + dy * k * s; if (xx < 0 || yy < 0 || xx >= N || yy >= N) break; const v = b[yy * N + xx]; if (v === who) n++; else { if (!v) open++; break; } } }
-        t += n >= 5 ? 1e6 : n === 4 ? (open === 2 ? 5e4 : open ? 4e3 : 0) : n === 3 ? (open === 2 ? 3e3 : open ? 150 : 0) : n === 2 ? (open === 2 ? 120 : 12) : 2; }
-      return t; };
-    let best = cand[0], bs = -1;
-    for (const i of cand) { const sc = lineScore(i, p) * 1.1 + lineScore(i, q) + Math.random() * 5; if (sc > bs) { bs = sc; best = i; } }
-    return { i: best };
-  }
   function botCoAccept() {
     const o = co.offers.find(x => x.id === 'me'); if (!o || coMine()) return;
-    const bot = bots.find(x => !x.tugging && !x.coing); if (!bot) return;
+    const free = bots.filter(x => !x.tugging && !x.coing), bot = (Math.random() < .5 && free.find(x => x.id === RU.TANG.id)) || free[0]; if (!bot) return;
     if (!RU.useStamina(prof, RU.CO.cost, Date.now())) { co.offers = []; emit({ t: 'coState', co: coState() }); return tired(); }
     prof.phuoc -= o.bet; co.offers = [];
     const busy = co.games.map(g => g.table), table = [...L.coTables.filter(t => (o.game === 'chess') === (t.id < 2)), ...L.coTables].find(t => !busy.includes(t.id));
@@ -273,7 +248,8 @@ window.LocalServer = function (deliver) {
     co.games.push(g);
     bot.coing = true; bot.path = []; bot.moving = false;
     [[g.x, table.seats[0]], [g.o, table.seats[1]]].forEach(([id, st]) => { if (id === 'me') { me.x = st.x; me.y = st.y; } else { bot.x = st.x; bot.y = st.y; bot.pose = 'sit'; emit({ t: 's', p: [[bot.id, st.x, st.y, 1, 0]] }); } emit({ t: 'pose', id, pose: 'sit', x: st.x, y: st.y, yaw: st.yaw }); });
-    emit({ t: 'feed', msg: `♟️ ${bot.name} nhận kèo ${RU.CO.names[o.game].toLowerCase()} ${o.bet} phước của bạn!` });
+    emit({ t: 'feed', msg: `${bot.id === RU.TANG.id ? '🧘' : '♟️'} ${bot.name} nhận kèo ${RU.CO.names[o.game].toLowerCase()} ${o.bet} phước của bạn!` });
+    if (bot.id === RU.TANG.id) emit({ t: 'npcSay', id: bot.id, text: 'Ngộ Không đâu chẳng thấy… thôi bần tăng đánh với thí chủ một ván vậy.' });
     emit({ t: 'coGame', g: coOut(g) }); emit({ t: 'coState', co: coState() }); emit({ t: 'profile', profile: profile() });
     botCoTurn(g);
   }
@@ -281,7 +257,7 @@ window.LocalServer = function (deliver) {
     if (g.over || RU.coTurnId(g) !== g.bot) return;
     setTimeout(() => {
       if (g.over) return;
-      const mv = g.game === 'chess' ? chessBot(g.s) : caroBot(g.s.b, g.s.turn); if (!mv) return;
+      const mv = RU.coBot(g); if (!mv) return;
       const r = RU.coPlay(g, g.bot, mv, Date.now());
       if (r.end) return endCo(g, r.end.winner, r.end.reason);
       emit({ t: 'coGame', g: coOut(g) });
