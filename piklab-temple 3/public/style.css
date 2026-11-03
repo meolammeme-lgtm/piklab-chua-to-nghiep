@@ -453,3 +453,4 @@ body.noblur .modal-wrap { backdrop-filter: none; -webkit-backdrop-filter: none; 
   .co-lobby, .co-play { grid-template-columns: 1fr; } .co-picks { grid-template-columns: 1fr 1fr; }
   .co-board { margin: 8px 6px; max-width: calc(100vw - 72px); }
 }
+.offer-exp { display: block; font-size: 11.5px; color: #8b7356; margin-top: 2px; font-weight: 500; }
