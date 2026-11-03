@@ -1,10 +1,13 @@
 // Bố cục khuôn viên chùa — dùng chung cho cả server (Node) và client (trình duyệt)
-// Đơn vị: px (1 px = 0.01 đơn vị 3D). 0–2040: trong chùa · 2040–3200: chợ trước cổng chùa
+// Đơn vị: px (1 px = 0.01 đơn vị 3D). 0–2040: trong chùa · 2040–3280: chợ trước cổng chùa · 3280–3500: sông
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
   else root.LAYOUT = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
-  const W = 2800, H = 3200;
+  const W = 2800, H = 3500;
+  const river = { y0: 3290, y1: 3480 };                 // dòng sông cuối đường
+  const wharf = { x: 1400, y: 3330, w: 170, h: 200 };    // bến phóng sinh nhô ra sông (tâm)
+  const release = { x: 1400, y: 3390, radius: 120 };     // mép bến: thả cá
   const GATE_Y = 2040;                                   // tường ngăn chùa / chợ
 
   // Chánh điện được dựng theo toạ độ gốc (tâm x=1000) rồi phóng to s lần và dời bằng (ox, oy)
@@ -56,15 +59,20 @@
     barber: { x: 2420, y: 2400, w: 250, h: 180, name: 'Cắt Tóc Gốc Cây' },
     fortune: { x: 2370, y: 560, s: 1.5, name: 'Am Xin Quẻ' },          // trong khuôn viên chùa
     tug: { x: 640, y: 2860, w: 600, h: 220 },
-    shout: { x: 2120, y: 2895, r: 240 }
+    thayDo: { x: 1640, y: 2385, w: 300, h: 230, name: 'Thầy Đồ Bezier' },   // cạnh quán ăn; khoảng trống phía dưới để dành làm sân câu cá
+    fishSeller: { x: 1640, y: 3190, name: 'Cô Ba bán cá' },
+    cau: { x: 2150, y: 3262, name: 'Bãi Câu Brief' }                             // 5 ghế câu dọc bờ sông, câu thẳng xuống sông
   };
   const fortuneYard = [2170, 410, 2580, 790];
+  const samhoi = { x: 1760, y: 870, w: 360, name: 'Bảng Sám Hối' };   // bảng gỗ ở sân lớn
+  const cauSeats = [0, 1, 2, 3, 4].map(i => ({ id: i, x: market.cau.x - 250 + i * 125, y: market.cau.y }));
   const leaves = [];
   for (let i = 0; i < 12; i++) { const a = (70 + i * 24) * Math.PI / 180, r = 175 + (i % 3) * 35; leaves.push({ id: i, x: Math.round(market.banyan.x + Math.cos(a) * r), y: Math.round(market.banyan.y + Math.sin(a) * r * .62) }); }
 
   // Lối đi lát đá (hình chữ nhật px) – dùng cho cảnh 3D và bản đồ nhỏ
   const paths = [
-    [1310, 690, 1490, H - 40],            // trục chính từ thềm điện tới cuối chợ
+    [1310, 690, 1490, 3240],              // trục chính từ thềm điện tới bến sông
+    [260, 3150, 2560, 3240],              // đường ven sông
     [800, 690, 2000, 1250],               // sân lớn trước chánh điện
     bellYard, [600, 690, 800, 790],       // sân gác chuông + lối nối
     fortuneYard, [2000, 690, 2170, 790],  // sân am xin quẻ + lối nối
@@ -78,7 +86,8 @@
     [hall.x - 30, hall.y - 30, hall.x + hall.w + 30, hall.y + hall.h + 50],
     [garden.x - 20, garden.y - 20, garden.x + garden.w + 20, garden.y + garden.h + 20],
     box(market.tug, 20), [0, GATE_Y - 40, W, GATE_Y + 50],
-    box(market.hat), box(market.cloth), box(market.food), box(market.barber),
+    box(market.hat), box(market.cloth), box(market.food), box(market.barber), box(market.thayDo, 10),
+    [0, river.y0 - 30, W, H], [market.fishSeller.x - 120, market.fishSeller.y - 80, market.fishSeller.x + 140, market.fishSeller.y + 60],
     [hut.x - 70, hut.y - 60, hut.x + 70, hut.y + 60],
     [coop.x - 110, coop.y - 80, coop.x + 110, coop.y + 80], [shed.x - 130, shed.y - 90, shed.x + 130, shed.y + 90]
   ];
@@ -87,7 +96,7 @@
     [150, 180], [680, 250], [2100, 230], [2680, 200], [150, 950], [2680, 980], [620, 1060], [2160, 1060],
     [1225, 1330], [1575, 1330], [1225, 1660], [1575, 1660], [1225, 1930], [1575, 1930], [1000, 1995], [1800, 1995], [2660, 1990],
     [2520, 460],                                           // cây bồ đề cạnh am xin quẻ
-    [150, 2650], [2680, 2300], [150, 3100], [2680, 3100], [1050, 3100], [1750, 3100], [2680, 2700]
+    [150, 2650], [2680, 2300], [150, 3060], [2680, 3060], [1000, 3070], [2600, 3090], [2680, 2700]
   ].map(([x, y], i) => ({ x, y, kind: i === 17 ? 0 : i % 3 }));
 
   const hs = (x, y, w, h) => { const a = hp(x, y); return { x: a.x, y: a.y, w: w * HALL.s, h: h * HALL.s }; };
@@ -104,7 +113,12 @@
     { x: well.x - 30, y: well.y - 25, w: 60, h: 45 },
     { x: hut.x - 55, y: hut.y - 40, w: 110, h: 70 },
     { x: coop.x - 80, y: coop.y - 50, w: 160, h: 80 }, { x: shed.x - 110, y: shed.y - 55, w: 220, h: 90 }, { x: kennel.x - 45, y: kennel.y - 35, w: 90, h: 60 },
-    { x: 0, y: 0, w: W, h: 60 }, { x: 0, y: H - 60, w: W, h: 60 },
+    { x: 0, y: 0, w: W, h: 60 },
+    { x: 0, y: river.y0, w: wharf.x - wharf.w / 2, h: H - river.y0 }, { x: wharf.x + wharf.w / 2, y: river.y0, w: W - wharf.x - wharf.w / 2, h: H - river.y0 },   // sông, chừa bến
+    { x: wharf.x - wharf.w / 2, y: wharf.y + wharf.h / 2, w: wharf.w, h: H },
+    { x: market.fishSeller.x - 70, y: market.fishSeller.y - 50, w: 170, h: 60 },
+    { x: market.thayDo.x - 135, y: market.thayDo.y - 70, w: 270, h: 140 },
+    { x: samhoi.x - samhoi.w / 2, y: samhoi.y - 20, w: samhoi.w, h: 34 },
     { x: 0, y: 0, w: 50, h: H }, { x: W - 50, y: 0, w: 50, h: H },
     { x: 0, y: GATE_Y, w: gate.x - 75, h: 50 }, { x: gate.x + 75, y: GATE_Y, w: W - gate.x - 75, h: 50 },
     { x: market.banyan.x - 55, y: market.banyan.y - 30, w: 110, h: 60 },
@@ -112,13 +126,12 @@
     { x: market.cloth.x - 130, y: market.cloth.y - 80, w: 260, h: 110 },
     { x: market.food.x - 210, y: market.food.y - 110, w: 220, h: 70 },
     { x: market.barber.x - 110, y: market.barber.y - 60, w: 60, h: 50 },
-    { x: market.shout.x - 110, y: market.shout.y + 120, w: 220, h: 80 }      // sân khấu nhỏ
   ];
   trees.forEach(t => solids.push({ x: t.x - 16, y: t.y - 6, w: 32, h: 20 }));
 
   return {
     W, H, GATE_Y, HALL, hp,
-    spawn: { x: 1400, y: 3050 },
+    spawn: { x: 1400, y: 3010 }, river, wharf, release, samhoi, cauSeats,
     hall, altar, bowl, bell, bellYard, garden, pen, pond, gate, cushions, rockeries, stupas, well, scarecrow, hut, coop, shed, kennel, nest, fortuneYard,
     plots, animals, trees, lanterns: [], solids, market, leaves, paths, noGrass,
     leafRadius: 75, plotRadius: 70, animalRadius: 130, fishRadius: 270, cushionRadius: 60
