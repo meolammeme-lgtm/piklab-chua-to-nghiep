@@ -61,11 +61,14 @@
     tug: { x: 640, y: 2860, w: 600, h: 220 },
     thayDo: { x: 1640, y: 2385, w: 300, h: 230, name: 'Thầy Đồ Bezier' },   // cạnh quán ăn; khoảng trống phía dưới để dành làm sân câu cá
     fishSeller: { x: 1640, y: 3190, name: 'Cô Ba bán cá' },
-    cau: { x: 2150, y: 3262, name: 'Bãi Câu Brief' }                             // 5 ghế câu dọc bờ sông, câu thẳng xuống sông
+    cau: { x: 2150, y: 3262, name: 'Bãi Câu Brief' },                            // 5 ghế câu dọc bờ sông, câu thẳng xuống sông
+    co: { x: 2080, y: 2930, w: 560, h: 270, name: 'Đình Cờ' }                   // sân đánh cờ: 4 bàn đá, mỗi bàn 2 ghế đối diện
   };
   const fortuneYard = [2170, 410, 2580, 790];
   const samhoi = { x: 1760, y: 870, w: 360, name: 'Bảng Sám Hối' };   // bảng gỗ ở sân lớn
   const cauSeats = [0, 1, 2, 3, 4].map(i => ({ id: i, x: market.cau.x - 250 + i * 125, y: market.cau.y }));
+  // 4 bàn cờ: người đi trước ngồi phía tây (quay mặt sang đông), người đi sau ngồi phía đông
+  const coTables = [0, 1, 2, 3].map(i => { const x = market.co.x - 195 + i * 130, y = market.co.y + 15; return { id: i, x, y, seats: [{ x: x - 52, y, yaw: Math.PI / 2 }, { x: x + 52, y, yaw: -Math.PI / 2 }] }; });
   const leaves = [];
   for (let i = 0; i < 12; i++) { const a = (70 + i * 24) * Math.PI / 180, r = 175 + (i % 3) * 35; leaves.push({ id: i, x: Math.round(market.banyan.x + Math.cos(a) * r), y: Math.round(market.banyan.y + Math.sin(a) * r * .62) }); }
 
@@ -78,7 +81,8 @@
     fortuneYard, [2000, 690, 2170, 790],  // sân am xin quẻ + lối nối
     [830, 1440, 1310, 1540],              // sang vườn rau
     [1490, 1440, 1960, 1540],             // sang nông trại
-    [260, 2540, 2560, 2700]               // phố chợ
+    [260, 2540, 2560, 2700],              // phố chợ
+    [market.co.x - market.co.w / 2, market.co.y - market.co.h / 2, market.co.x + market.co.w / 2, market.co.y + market.co.h / 2]   // sân gạch Đình Cờ
   ];
   const box = (o, pad = 30) => [o.x - o.w / 2 - pad, o.y - o.h / 2 - pad, o.x + o.w / 2 + pad, o.y + o.h / 2 + pad];
   // Những vùng không mọc cỏ (ngoài lối đi)
@@ -119,6 +123,7 @@
     { x: market.fishSeller.x - 70, y: market.fishSeller.y - 50, w: 170, h: 60 },
     { x: market.thayDo.x - 135, y: market.thayDo.y - 70, w: 270, h: 140 },
     { x: samhoi.x - samhoi.w / 2, y: samhoi.y - 20, w: samhoi.w, h: 34 },
+    ...coTables.map(t => ({ x: t.x - 26, y: t.y - 20, w: 52, h: 40 })),   // bàn đá
     { x: 0, y: 0, w: 50, h: H }, { x: W - 50, y: 0, w: 50, h: H },
     { x: 0, y: GATE_Y, w: gate.x - 75, h: 50 }, { x: gate.x + 75, y: GATE_Y, w: W - gate.x - 75, h: 50 },
     { x: market.banyan.x - 55, y: market.banyan.y - 30, w: 110, h: 60 },
@@ -131,7 +136,7 @@
 
   return {
     W, H, GATE_Y, HALL, hp,
-    spawn: { x: 1400, y: 3010 }, river, wharf, release, samhoi, cauSeats,
+    spawn: { x: 1400, y: 3010 }, river, wharf, release, samhoi, cauSeats, coTables,
     hall, altar, bowl, bell, bellYard, garden, pen, pond, gate, cushions, rockeries, stupas, well, scarecrow, hut, coop, shed, kennel, nest, fortuneYard,
     plots, animals, trees, lanterns: [], solids, market, leaves, paths, noGrass,
     leafRadius: 75, plotRadius: 70, animalRadius: 130, fishRadius: 270, cushionRadius: 60
