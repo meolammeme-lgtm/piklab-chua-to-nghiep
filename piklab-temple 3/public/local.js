@@ -294,6 +294,7 @@ window.LocalServer = function (deliver) {
         }
         case 'move': me.x = m.x; me.y = m.y; if (m.moving && chant) { chant = null; emit({ t: 'pose', id: 'me', pose: '' }); } if (m.moving && me.seat !== null && me.seat !== undefined) { me.seat = null; me.cast = null; emit({ t: 'pose', id: 'me', pose: '' }); } break;
         case 'emote': emit({ t: 'emote', id: 'me', e: m.e }); break;
+        case 'rest': emit({ t: 'pose', id: 'me', pose: RU.POSES[m.pose] ? m.pose : '' }); break;
         case 'bellStart': {
           const d = dd(), now = Date.now();
           if (!near(me, L.bell, L.bell.radius + 90)) return emit({ t: 'bellWait', msg: 'Lại gần chuông hơn chút nữa rồi thỉnh nhé 🔔' });
